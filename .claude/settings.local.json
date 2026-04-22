@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/nikolasborrel/github/libparanumal-dtu log --oneline)",
+      "Bash(git -C /Users/nikolasborrel/github/libParanumal log --oneline)",
+      "Bash(git:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}
