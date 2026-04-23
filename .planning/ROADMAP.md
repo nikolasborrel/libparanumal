@@ -29,7 +29,9 @@ A sequence of seven self-contained PRs that merge room acoustics research featur
   2. Developer can run unit tests that compare acoustic pressure field values against reference data from the fork and see pass/fail per test case on stdout
   3. Developer can run integration tests covering FreqIndep and PerfRefl BCs on 2D and 3D meshes and see per-test pass/fail results
   4. CI pipeline executes the full test suite and reports pass/fail in the PR check; tests that depend on later phases are annotated as expected-fail
-**Plans**: TBD
+**Plans**: 2 plans
+  - [ ] 01-01-PLAN.md — Build infrastructure: vendor Catch2 v3.14.0, author `acousticsTests.cpp` (4 unit + 4 BC smoke), wire `make tests` / `clean-tests` in `solvers/acoustics/makefile`
+  - [ ] 01-02-PLAN.md — CI integration: append `Build Catch2 Tests` + `Run Catch2 Tests` steps to `.github/workflows/build.yml`; human-verify CI log renders per-test-case output
 
 ### Phase 2: Kernel Correctness Fixes
 **Goal**: All acoustics OKL kernels use correct GPU annotations and naming consistent with the rest of libParanumal v0.5.0, eliminating latent GPU memory-access bugs and naming inconsistencies inherited from the pre-v0.5.0 era
@@ -103,7 +105,7 @@ A sequence of seven self-contained PRs that merge room acoustics research featur
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Suite | 0/TBD | Not started | - |
+| 1. Test Suite | 0/2 | Not started | - |
 | 2. Kernel Correctness Fixes | 0/TBD | Not started | - |
 | 3. Flux Variants | 0/TBD | Not started | - |
 | 4. Receiver System | 0/TBD | Not started | - |
