@@ -29,3 +29,15 @@ jobs:
         bash <(curl --no-buffer -s https://codecov.io/bash) -x gcov
       env:
         LIBP_COVERAGE: 1
+
+    - name: Build Catch2 Tests
+      run: |
+        cd solvers/acoustics
+        make tests
+      env:
+        LIBP_COVERAGE: 1
+
+    - name: Run Catch2 Tests
+      run: |
+        cd solvers/acoustics
+        mpirun --oversubscribe -np 1 ./acousticsTests
