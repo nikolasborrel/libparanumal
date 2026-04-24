@@ -233,11 +233,11 @@ void mrsaab3::UpdateCoefficients() {
       if (lambda[n]==0) { //Zero exponential term, usual AB coefficients
 
         dfloat _saab_X[1]  = { 1.0 };
-        dfloat _saab_A[Nstages*Nstages]
+        const dfloat _saab_A[9]     // Nstages==3, fixed size for clang compat
                       = {    1.0,      0.0,    0.0,
                            3./2.,   -1./2.,    0.0,
                          23./12., -16./12., 5./12.};
-        dfloat _saab_B[Nstages*Nstages] = {
+        const dfloat _saab_B[9] = {
                            1./2.,      0.0,    0.0,
                            5./8.,   -1./8.,    0.0,
                          17./24.,  -7./24., 2./24.};
@@ -303,11 +303,11 @@ void mrsaab3::UpdateCoefficients() {
         dfloat bb33=real(b33)/ (double) Nr;
 
         dfloat _saab_X[1]  = { std::exp(alpha) };
-        dfloat _saab_A[Nstages*Nstages]
+        const dfloat _saab_A[9]     // Nstages==3, fixed size for clang compat
                         ={   aa11,   0.0,   0.0,
                              aa21,  aa22,   0.0,
                              aa31,  aa32,  aa33 };
-        dfloat _saab_B[Nstages*Nstages]
+        const dfloat _saab_B[9]
                         ={   bb11,   0.0,   0.0,
                              bb21,  bb22,   0.0,
                              bb31,  bb32,  bb33 };
@@ -366,12 +366,12 @@ mrsaab3_pml::mrsaab3_pml(dlong Nelements, dlong NpmlElements, dlong NhaloElement
                                       "mrsaabPmlUpdate",
                                       kernelInfo);
 
-    // initialize AB time stepping coefficients
-    dfloat _ab_a[Nstages*Nstages] = {
+    // initialize AB time stepping coefficients (Nstages==3, fixed size for clang compat)
+    const dfloat _ab_a[9] = {
                              1.0,      0.0,    0.0,
                            3./2.,   -1./2.,    0.0,
                          23./12., -16./12., 5./12.};
-    dfloat _ab_b[Nstages*Nstages] = {
+    const dfloat _ab_b[9] = {
                            1./2.,      0.0,    0.0,
                            5./8.,   -1./8.,    0.0,
                          17./24.,  -7./24., 2./24.};

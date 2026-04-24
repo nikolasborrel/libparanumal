@@ -37,6 +37,8 @@ Acoustics solver makefile targets:
    make info
    make help
    make test
+   make tests
+   make clean-tests
 
 Usage:
 
@@ -58,12 +60,16 @@ make help
    Display this help message.
 make test
    Run tests.
+make tests
+   Build the Catch2 test binary (acousticsTests) by linking against libacoustics.a.
+make clean-tests
+   Remove the acousticsTests binary and its object files.
 Can use "make verbose=true" for verbose output.
 
 endef
 
 ifeq (,$(filter acousticsMain lib clean clean-libs clean-kernels \
-                realclean info help test,$(MAKECMDGOALS)))
+                realclean info help test tests clean-tests,$(MAKECMDGOALS)))
 ifneq (,$(MAKECMDGOALS))
 $(error ${ACOUSTICS_HELP_MSG})
 endif
@@ -108,7 +114,7 @@ SRC =$(wildcard src/*.cpp)
 OBJS=$(SRC:.cpp=.o)
 
 .PHONY: all lib libp_libs clean clean-libs \
-		clean-kernels realclean help info
+		clean-kernels realclean help info tests clean-tests
 
 all: acousticsMain
 
@@ -145,6 +151,42 @@ else
 	@printf "%b" "$(OBJ_COLOR)Compiling $(@F)$(NO_COLOR)\n";
 	@$(LIBP_CXX) -o $*.o -c $*.cpp $(ACOUSTICS_CXXFLAGS)
 endif
+
+#test binary
+TESTS_OBJS = tests/catch_amalgamated.o tests/acousticsTests.o
+
+# catch_amalgamated.cpp must be compiled with CATCH_AMALGAMATED_CUSTOM_MAIN so it
+# does not define its own main() — acousticsTests.cpp provides the custom main with
+# MPI bracketing instead.
+tests/catch_amalgamated.o: tests/catch_amalgamated.cpp | libp_libs
+ifneq (,${verbose})
+	$(LIBP_CXX) -o $@ -c $< $(ACOUSTICS_CXXFLAGS) -I tests/ -DCATCH_AMALGAMATED_CUSTOM_MAIN
+else
+	@printf "%b" "$(OBJ_COLOR)Compiling $(@F)$(NO_COLOR)\n";
+	@$(LIBP_CXX) -o $@ -c $< $(ACOUSTICS_CXXFLAGS) -I tests/ -DCATCH_AMALGAMATED_CUSTOM_MAIN
+endif
+
+# rule for remaining test .cpp files (reuses solver flags plus -I tests/ for catch header)
+tests/%.o: tests/%.cpp $(DEPS) | libp_libs
+ifneq (,${verbose})
+	$(LIBP_CXX) -o $@ -c $< $(ACOUSTICS_CXXFLAGS) -I tests/
+else
+	@printf "%b" "$(OBJ_COLOR)Compiling $(@F)$(NO_COLOR)\n";
+	@$(LIBP_CXX) -o $@ -c $< $(ACOUSTICS_CXXFLAGS) -I tests/
+endif
+
+acousticsTests: lib $(TESTS_OBJS)
+ifneq (,${verbose})
+	$(LIBP_LD) -o acousticsTests $(TESTS_OBJS) -L. -lacoustics $(LFLAGS)
+else
+	@printf "%b" "$(EXE_COLOR)Linking $(@F)$(NO_COLOR)\n";
+	@$(LIBP_LD) -o acousticsTests $(TESTS_OBJS) -L. -lacoustics $(LFLAGS)
+endif
+
+tests: acousticsMain acousticsTests
+
+clean-tests:
+	rm -f tests/*.o acousticsTests
 
 #cleanup
 clean:

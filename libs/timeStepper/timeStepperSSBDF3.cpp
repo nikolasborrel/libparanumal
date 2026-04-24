@@ -57,8 +57,8 @@ ssbdf3::ssbdf3(dlong Nelements, dlong NhaloElements,
                                     "ssbdfRHS",
                                     kernelInfo);
 
-  // initialize BDF time stepping coefficients
-  dfloat _b[Nstages*(Nstages+1)] = {
+  // initialize BDF time stepping coefficients (Nstages==3, fixed size for clang compat)
+  const dfloat _b[12] = {
                             1.,    1.,     0.,    0.,
                          3./2.,    2., -1./2.,    0.,
                         11./6.,    3., -3./2., 1./3.};

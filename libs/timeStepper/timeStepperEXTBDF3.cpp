@@ -61,12 +61,12 @@ extbdf3::extbdf3(dlong Nelements, dlong NhaloElements,
                                     "extbdfRHS",
                                     kernelInfo);
 
-  // initialize EXT and BDF time stepping coefficients
-  dfloat _a[Nstages*Nstages] = {
+  // initialize EXT and BDF time stepping coefficients (Nstages==3, fixed size for clang compat)
+  const dfloat _a[9] = {
                             1.,    0.,     0.,
                             2.,   -1.,     0.,
                             3.,   -3.,     1.};
-  dfloat _b[Nstages*(Nstages+1)] = {
+  const dfloat _b[12] = {
                             1.,    1.,     0.,    0.,
                          3./2.,    2., -1./2.,    0.,
                         11./6.,    3., -3./2., 1./3.};

@@ -56,8 +56,8 @@ ab3::ab3(dlong Nelements, dlong NhaloElements,
                                     "abUpdate",
                                     kernelInfo);
 
-  // initialize AB time stepping coefficients
-  dfloat _ab_a[Nstages*Nstages] = {
+  // initialize AB time stepping coefficients (Nstages==3, use fixed size for clang compat)
+  const dfloat _ab_a[9] = {
                            1.0,      0.0,    0.0,
                          3./2.,   -1./2.,    0.0,
                        23./12., -16./12., 5./12.};

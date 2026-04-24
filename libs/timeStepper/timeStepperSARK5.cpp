@@ -95,8 +95,8 @@ sark5::sark5(dlong _Nelements, dlong _NhaloElements,
                                     "sarkErrorEstimate",
                                     kernelInfo);
 
-  // Semi-Analytic Runge Kutta - order (4) 5 with PID timestep control
-  dfloat _rkC[Nrk] = {0.0, 0.25, 0.25, 0.5, 0.75, 1.0, 1.0};
+  // Semi-Analytic Runge Kutta - order (4) 5 with PID timestep control (Nrk==7, fixed size for clang compat)
+  const dfloat _rkC[7] = {0.0, 0.25, 0.25, 0.5, 0.75, 1.0, 1.0};
   rkC.malloc(Nrk);
   rkC.copyFrom(_rkC);
 
@@ -334,8 +334,9 @@ void sark5::UpdateCoefficients() {
 
     if (lambda[n]==0) { //Zero exponential term, usual RK coefficients
 
-      dfloat _rkX[Nrk]   = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
-      dfloat _rkA[Nrk*Nrk]  =  {     0,      0,       0,       0,       0,      0,   0,
+      // Nrk==7, use fixed size for clang compat
+      const dfloat _rkX[7]   = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+      const dfloat _rkA[49]  =  {     0,      0,       0,       0,       0,      0,   0,
                                    1/4,      0,       0,       0,       0,      0,   0,
                                    1/8,    1/8,       0,       0,       0,      0,   0,
                                      0,      0,     1/2,       0,       0,      0,   0,
@@ -343,7 +344,7 @@ void sark5::UpdateCoefficients() {
                                 -3./7.,  8./7.,   6./7., -12./7.,   8./7.,      0,   0,
                                 7./90.,     0., 16./45.,  2./15., 16./45., 7./90.,   0};
 
-      dfloat _rkE[Nrk]=  {-4./45., 0, 16./45., -8./15., 16./45., -4./45., 0.};
+      const dfloat _rkE[7]=  {-4./45., 0, 16./45., -8./15., 16./45., -4./45., 0.};
 
       h_rkX.copyFrom(_rkX,    Nrk,n*Nrk    );
       h_rkA.copyFrom(_rkA,Nrk*Nrk,n*Nrk*Nrk);
@@ -450,14 +451,15 @@ void sark5::UpdateCoefficients() {
       dfloat b4=real(cb4)/ (double) Nr;
       dfloat b6=real(cb6)/ (double) Nr;
 
-      dfloat _rkX[Nrk]  = {1.0,
+      // Nrk==7, use fixed size for clang compat
+      const dfloat _rkX[7]  = {1.0,
                            std::exp(dfloat(0.25)*alpha),
                            std::exp(dfloat(0.25)*alpha),
                            std::exp(dfloat(0.5)*alpha),
                            std::exp(dfloat(0.75)*alpha),
                            std::exp(alpha),
                            std::exp(alpha)};
-      dfloat _rkA[Nrk*Nrk]={   0,   0,     0,     0,     0,    0,   0,
+      const dfloat _rkA[49]={   0,   0,     0,     0,     0,    0,   0,
                              a21,   0,     0,     0,     0,    0,   0,
                              a31, a32,     0,     0,     0,    0,   0,
                              a41,   0,   a43,     0,     0,    0,   0,
@@ -465,7 +467,7 @@ void sark5::UpdateCoefficients() {
                              a61, a62,   a63,   a64,   a65,    0,   0,
                              a71,   0,   a73,   a74,   a75,  a76,   0};
 
-      dfloat _rkE[Nrk]= {b1, 0, b3, b4, a75, b6, 0};
+      const dfloat _rkE[7]= {b1, 0, b3, b4, a75, b6, 0};
 
       h_rkX.copyFrom(_rkX,    Nrk,n*Nrk    );
       h_rkA.copyFrom(_rkA,Nrk*Nrk,n*Nrk*Nrk);
@@ -526,7 +528,8 @@ sark5_pml::sark5_pml(dlong _Nelements, dlong _NpmlElements, dlong _NhaloElements
     // Semi-Analytic Runge Kutta - order (3) 4 with PID timestep control
     pmlrkA.malloc(Nrk*Nrk);
 
-    dfloat _pmlrkA[Nrk*Nrk] =  {     0,      0,       0,       0,       0,      0,   0,
+    // Nrk==7, use fixed size for clang compat
+    const dfloat _pmlrkA[49] =  {     0,      0,       0,       0,       0,      0,   0,
                                    1/4,      0,       0,       0,       0,      0,   0,
                                    1/8,    1/8,       0,       0,       0,      0,   0,
                                      0,      0,     1/2,       0,       0,      0,   0,

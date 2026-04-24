@@ -146,7 +146,7 @@ void saab3::UpdateCoefficients() {
     if (lambda[n]==0) { //Zero exponential term, usual AB coefficients
 
       dfloat _saab_X[1]  = { 1.0 };
-      dfloat _saab_A[Nstages*Nstages]
+      const dfloat _saab_A[9]         // Nstages==3, fixed size for clang compat
                     = {    1.0,      0.0,    0.0,
                          3./2.,   -1./2.,    0.0,
                        23./12., -16./12., 5./12.};
@@ -191,7 +191,7 @@ void saab3::UpdateCoefficients() {
       dfloat aa33=real(a33)/ (double) Nr;
 
       dfloat _saab_X[1]  = { std::exp(alpha) };
-      dfloat _saab_A[Nstages*Nstages]
+      const dfloat _saab_A[9]         // Nstages==3, fixed size for clang compat
                       ={   aa11,   0.0,   0.0,
                            aa21,  aa22,   0.0,
                            aa31,  aa32,  aa33 };
@@ -238,8 +238,8 @@ saab3_pml::saab3_pml(dlong _Nelements, dlong _NpmlElements, dlong _NhaloElements
                                       "saabPmlUpdate",
                                       kernelInfo);
 
-    // initialize AB time stepping coefficients
-    dfloat _ab_a[Nstages*Nstages] = {
+    // initialize AB time stepping coefficients (Nstages==3, fixed size for clang compat)
+    const dfloat _ab_a[9] = {
                              1.0,      0.0,    0.0,
                            3./2.,   -1./2.,    0.0,
                          23./12., -16./12., 5./12.};

@@ -102,28 +102,40 @@ void platform_t::DeviceConfig(){
 
 #if !defined(LIBP_DEBUG)
   /*set number of omp threads to use*/
-  /*Use lscpu to determine core and socket counts */
-  FILE *pipeCores   = popen("lscpu | grep \"Core(s) per socket\" | awk '{print $4}'", "r");
-  FILE *pipeSockets = popen("lscpu | grep \"Socket(s)\" | awk '{print $2}'", "r");
-  LIBP_ABORT("popen() failed!",
-             !pipeCores || !pipeSockets);
+  int NcoresPerNode = 1;
+#if defined(__APPLE__)
+  /*On macOS, use sysctl to determine physical core count */
+  {
+    FILE *pipeCores = popen("sysctl -n hw.physicalcpu", "r");
+    LIBP_ABORT("popen() failed!", !pipeCores);
+    std::array<char, 128> buffer;
+    LIBP_ABORT("Error reading core count",
+               !fgets(buffer.data(), buffer.size(), pipeCores));
+    pclose(pipeCores);
+    NcoresPerNode = std::stoi(buffer.data());
+  }
+#else
+  /*On Linux, use lscpu to determine core and socket counts */
+  {
+    FILE *pipeCores   = popen("lscpu | grep \"Core(s) per socket\" | awk '{print $4}'", "r");
+    FILE *pipeSockets = popen("lscpu | grep \"Socket(s)\" | awk '{print $2}'", "r");
+    LIBP_ABORT("popen() failed!",
+               !pipeCores || !pipeSockets);
 
-  std::array<char, 128> buffer;
-  //read to end of line
-  LIBP_ABORT("Error reading core count",
-             !fgets(buffer.data(), buffer.size(), pipeCores));
-  int Ncores = std::stoi(buffer.data());
+    std::array<char, 128> buffer;
+    LIBP_ABORT("Error reading core count",
+               !fgets(buffer.data(), buffer.size(), pipeCores));
+    int Ncores = std::stoi(buffer.data());
 
-  //read to end of line
-  LIBP_ABORT("Error reading core count",
-             !fgets(buffer.data(), buffer.size(), pipeSockets));
-  int Nsockets = std::stoi(buffer.data());
+    LIBP_ABORT("Error reading core count",
+               !fgets(buffer.data(), buffer.size(), pipeSockets));
+    int Nsockets = std::stoi(buffer.data());
 
-  pclose(pipeCores);
-  pclose(pipeSockets);
-
-  // int Ncores = omp_get_num_procs();
-  int NcoresPerNode = Ncores*Nsockets;
+    pclose(pipeCores);
+    pclose(pipeSockets);
+    NcoresPerNode = Ncores*Nsockets;
+  }
+#endif
   int Nthreads=0;
 
   /*Check OMP_NUM_THREADS env variable*/
