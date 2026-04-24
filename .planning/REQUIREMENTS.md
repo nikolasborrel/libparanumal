@@ -7,10 +7,13 @@
 
 ### Tests
 
-- [ ] **TESTS-01**: Developer can run Catch2 unit tests that verify acoustic pressure field values against reference data from the fork
-- [ ] **TESTS-02**: Developer can run Catch2 integration tests covering FreqIndep and PerfRefl BCs on 2D and 3D meshes
+- [x] **TESTS-01
+**: Developer can run Catch2 unit tests that verify acoustic pressure field values against reference data from the fork
+- [x] **TESTS-02
+**: Developer can run Catch2 integration tests covering FreqIndep and PerfRefl BCs on 2D and 3D meshes
 - [ ] **TESTS-03**: CI pipeline executes the test suite and reports pass/fail per test case
-- [ ] **TESTS-04**: Test infrastructure compiles and links against the existing C++ libParanumal build system
+- [x] **TESTS-04
+**: Test infrastructure compiles and links against the existing C++ libParanumal build system
 
 ### Kernel Fixes
 
