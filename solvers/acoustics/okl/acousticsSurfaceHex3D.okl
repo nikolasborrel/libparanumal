@@ -183,7 +183,13 @@ void surfaceTerms(const int e,
   const dfloat sc = invWJ*sJ;
 
   dfloat rflux, uflux, vflux, wflux;
+#if defined(p_ROOM_ACOUSTICS)
+  dfloat vn = 0.0;
+  if(bc == 2) vn = rM / p_Z_IND;
+  upwindBC(nx, ny, nz, rM, uM, vM, wM, rP, uP, vP, wP, &rflux, &uflux, &vflux, &wflux, vn);
+#else
   upwind(nx, ny, nz, rM, uM, vM, wM, rP, uP, vP, wP, &rflux, &uflux, &vflux, &wflux);
+#endif
 
   const dlong base = e*p_Np*p_Nfields+k*p_Nq*p_Nq + j*p_Nq+i;
   rhsq[base+0*p_Np] += sc*(-rflux);

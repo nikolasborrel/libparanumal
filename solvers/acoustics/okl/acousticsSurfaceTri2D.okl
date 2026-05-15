@@ -186,7 +186,13 @@ void centralBC(const dfloat nx,
 
             dfloat rflux, uflux, vflux;
 
+#if defined(p_ROOM_ACOUSTICS)
+            dfloat vn = 0.0;
+            if(bc == 2) vn = rM / p_Z_IND;
+            upwindBC(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux, vn);
+#else
             upwind(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux);
+#endif
 
             // const dfloat hinv = sgeo[sid + p_IHID];
             // dfloat penalty = p_Nq*p_Nq*hinv*mu;

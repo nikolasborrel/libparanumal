@@ -210,7 +210,13 @@ void centralBC(const dfloat nx,
 
             dfloat rflux, uflux, vflux, wflux;
 
+#if defined(p_ROOM_ACOUSTICS)
+            dfloat vn = 0.0;
+            if(bc == 2) vn = rM / p_Z_IND;
+            upwindBC(nx, ny, nz, rM, uM, vM, wM, rP, uP, vP, wP, &rflux, &uflux, &vflux, &wflux, vn);
+#else
             upwind(nx, ny, nz, rM, uM, vM, wM, rP, uP, vP, wP, &rflux, &uflux, &vflux, &wflux);
+#endif
 
             s_rflux[es][n] = sc*(-rflux );
             s_uflux[es][n] = sc*(-uflux);
