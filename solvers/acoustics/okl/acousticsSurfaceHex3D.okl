@@ -54,6 +54,84 @@ void upwind(const dfloat nx,
 
 }
 
+// Upwind flux with wall-normal velocity term for impedance BCs (full-flux form)
+void upwindBC(const dfloat nx,
+              const dfloat ny,
+              const dfloat nz,
+              const dfloat rM,
+              const dfloat uM,
+              const dfloat vM,
+              const dfloat wM,
+              const dfloat rP,
+              const dfloat uP,
+              const dfloat vP,
+              const dfloat wP,
+              dfloat *rflux,
+              dfloat *uflux,
+              dfloat *vflux,
+              dfloat *wflux,
+              const dfloat vn){
+
+  dfloat ndotUM = nx*uM + ny*vM + nz*wM;
+  dfloat ndotUP = nx*uP + ny*vP + nz*wP;
+  const dfloat vn2 = 2.0*vn;
+  *rflux  = p_half*   ((ndotUP+vn2+ndotUM)*p_AcConstant - (rP+rM-(ndotUP-ndotUM))*p_c);
+  *uflux  = p_half*nx*((rP+rM)/p_rho      - (ndotUP+vn2-ndotUM)*p_c);
+  *vflux  = p_half*ny*((rP+rM)/p_rho      - (ndotUP+vn2-ndotUM)*p_c);
+  *wflux  = p_half*nz*((rP+rM)/p_rho      - (ndotUP+vn2-ndotUM)*p_c);
+}
+
+// Central flux (full-flux form)
+void central(const dfloat nx,
+             const dfloat ny,
+             const dfloat nz,
+             const dfloat rM,
+             const dfloat uM,
+             const dfloat vM,
+             const dfloat wM,
+             const dfloat rP,
+             const dfloat uP,
+             const dfloat vP,
+             const dfloat wP,
+             dfloat *rflux,
+             dfloat *uflux,
+             dfloat *vflux,
+             dfloat *wflux){
+
+  dfloat ndotUM = nx*uM + ny*vM + nz*wM;
+  dfloat ndotUP = nx*uP + ny*vP + nz*wP;
+  *rflux  = p_half*(ndotUP + ndotUM);
+  *uflux  = p_half*nx*(rP+rM);
+  *vflux  = p_half*ny*(rP+rM);
+  *wflux  = p_half*nz*(rP+rM);
+}
+
+// Central flux with wall-normal velocity term (full-flux form)
+void centralBC(const dfloat nx,
+               const dfloat ny,
+               const dfloat nz,
+               const dfloat rM,
+               const dfloat uM,
+               const dfloat vM,
+               const dfloat wM,
+               const dfloat rP,
+               const dfloat uP,
+               const dfloat vP,
+               const dfloat wP,
+               const dfloat vn,
+               dfloat *rflux,
+               dfloat *uflux,
+               dfloat *vflux,
+               dfloat *wflux){
+
+  dfloat ndotUM = nx*uM + ny*vM + nz*wM;
+  dfloat ndotUP = nx*uP + ny*vP + nz*wP;
+  *rflux  = (p_half*(ndotUP + ndotUM) + vn)*p_AcConstant;
+  *uflux  = p_half*nx*(rP+rM)/p_rho;
+  *vflux  = p_half*ny*(rP+rM)/p_rho;
+  *wflux  = p_half*nz*(rP+rM)/p_rho;
+}
+
 void surfaceTerms(const int e,
                   const int sk,
                   const int face,
