@@ -152,4 +152,7 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   initialConditionKernel = platform.buildKernel(fileName, kernelName,
                                                   kernelInfo);
+
+  // Setup receiver interpolation (builds kernel + allocates buffers)
+  SetupReceivers();
 }
