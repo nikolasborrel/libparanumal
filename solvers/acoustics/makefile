@@ -105,7 +105,11 @@ DEPS=$(wildcard *.hpp) \
 
 SRC =$(wildcard src/*.cpp)
 
-OBJS=$(SRC:.cpp=.o)
+# tinywav is a C library; compile separately with the C compiler
+TINYWAV_SRC =src/tinywav.c
+TINYWAV_OBJ =src/tinywav.o
+
+OBJS=$(SRC:.cpp=.o) $(TINYWAV_OBJ)
 
 .PHONY: all lib libp_libs clean clean-libs \
 		clean-kernels realclean help info
@@ -144,6 +148,15 @@ ifneq (,${verbose})
 else
 	@printf "%b" "$(OBJ_COLOR)Compiling $(@F)$(NO_COLOR)\n";
 	@$(LIBP_CXX) -o $*.o -c $*.cpp $(ACOUSTICS_CXXFLAGS)
+endif
+
+# rule for tinywav C source
+$(TINYWAV_OBJ): $(TINYWAV_SRC) | libp_libs
+ifneq (,${verbose})
+	$(LIBP_CC) -o $@ -c $< $(ACOUSTICS_CXXFLAGS)
+else
+	@printf "%b" "$(OBJ_COLOR)Compiling $(@F)$(NO_COLOR)\n";
+	@$(LIBP_CC) -o $@ -c $< $(ACOUSTICS_CXXFLAGS)
 endif
 
 #cleanup

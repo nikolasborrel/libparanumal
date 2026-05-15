@@ -70,6 +70,25 @@ public:
 
   kernel_t initialConditionKernel;
 
+  // Receiver interpolation
+  dlong NReceivers = 0;
+  dlong NReceiversLocal = 0;
+  dlong NRecvSamples = 0;
+  dlong recvSampleIdx = 0;
+  int   sampleRateOut = 0;
+
+  memory<dfloat> recvXYZ;
+  memory<dlong>  recvElements;
+  memory<dlong>  recvElementsIdx;
+  memory<dfloat> qRecv;            // host: [NReceiversLocal × NRecvSamples]
+
+  deviceMemory<dfloat> o_recvIP;          // interpolation operators [NReceiversLocal × Np]
+  deviceMemory<dlong>  o_recvElements;
+  deviceMemory<dlong>  o_recvElementsIdx;
+  deviceMemory<dfloat> o_qRecv;           // device: [NReceiversLocal × NRecvSamples]
+
+  kernel_t receiverKernel;
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {
@@ -80,6 +99,8 @@ public:
   void Setup(platform_t& _platform, mesh_t& _mesh,
              acousticsSettings_t& _settings);
 
+  void SetupReceivers();
+
   void Run();
 
   void Report(dfloat time, int tstep);
@@ -89,6 +110,8 @@ public:
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
 
   dfloat MaxWaveSpeed();
+
+  void WriteWavIRs();
 };
 
 #endif

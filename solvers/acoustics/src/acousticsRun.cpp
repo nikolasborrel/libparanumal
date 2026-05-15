@@ -51,6 +51,9 @@ void acoustics_t::Run(){
 
   timeStepper.Run(*this, o_q, startTime, finalTime);
 
+  // Write WAV impulse responses (no-op if no receivers configured)
+  WriteWavIRs();
+
   // output norm of final solution
   {
     //compute q.M*q

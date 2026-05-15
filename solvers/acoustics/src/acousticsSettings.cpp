@@ -74,6 +74,14 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
 
   newSetting("OUTPUT FILE NAME",
              "acoustics");
+
+  newSetting("RECEIVER FILE",
+             "",
+             "Path to receiver locations file (optional)");
+
+  newSetting("OUTPUT DIRECTORY",
+             ".",
+             "Directory for WAV and field output files");
 }
 
 void acousticsSettings_t::report() {
