@@ -53,6 +53,8 @@ public:
 
   int Nfields;
 
+  dfloat rho, c; // medium density [kg/m^3] and speed of sound [m/s]
+
   timeStepper_t timeStepper;
 
   ogs::halo_t traceHalo;

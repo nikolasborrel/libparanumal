@@ -36,6 +36,9 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   Nfields = (mesh.dim==3) ? 4:3;
 
+  settings.getSetting("DENSITY", rho);
+  settings.getSetting("SPEED OF SOUND", c);
+
   dlong Nlocal = mesh.Nelements*mesh.Np*Nfields;
   dlong Nhalo  = mesh.totalHaloPairs*mesh.Np*Nfields;
 
@@ -86,6 +89,10 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   const dfloat p_half = 1./2.;
   kernelInfo["defines/" "p_half"]= p_half;
+
+  kernelInfo["defines/" "p_rho"]= rho;
+  kernelInfo["defines/" "p_c"]= c;
+  kernelInfo["defines/" "p_AcConstant"]= rho*c*c;
 
   int maxNodes = std::max(mesh.Np, (mesh.Nfp*mesh.Nfaces));
   kernelInfo["defines/" "p_maxNodes"]= maxNodes;

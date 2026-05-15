@@ -34,6 +34,14 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "data/acousticsGaussian2D.h",
              "Boundary and Initial conditions header");
 
+  newSetting("DENSITY",
+             "1.0",
+             "Medium density [kg/m^3]");
+
+  newSetting("SPEED OF SOUND",
+             "1.0",
+             "Speed of sound in the medium [m/s]");
+
   newSetting("TIME INTEGRATOR",
              "DOPRI5",
              "Time integration method",
@@ -69,6 +77,8 @@ void acousticsSettings_t::report() {
   if (comm.rank()==0) {
     std::cout << "Acoustics Settings:\n\n";
     reportSetting("DATA FILE");
+    reportSetting("DENSITY");
+    reportSetting("SPEED OF SOUND");
     reportSetting("TIME INTEGRATOR");
     reportSetting("START TIME");
     reportSetting("FINAL TIME");
