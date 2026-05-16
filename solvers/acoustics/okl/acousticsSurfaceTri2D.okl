@@ -122,7 +122,13 @@ void centralBC(const dfloat nx,
                                   @restrict const  dfloat *  y,
                                   @restrict const  dfloat *  z,
                                   @restrict const  dfloat *  q,
-                                  @restrict dfloat *  rhsq){
+                                  @restrict        dfloat *  rhsq,
+                                  @restrict const  dfloat *  acc,
+                                  @restrict        dfloat *  rhsacc,
+                                  @restrict const  dlong  *  mapAcc,
+                                  @restrict const  dfloat *  LR,
+                                  @restrict const  dlong  *  LRInfo,
+                                  const dlong NLRPoints){
 
   // for all elements
   for(dlong eo=0;eo<Nelements;eo+=p_NblockS;@outer(0)){
@@ -188,7 +194,32 @@ void centralBC(const dfloat nx,
 
 #if defined(p_ROOM_ACOUSTICS)
             dfloat vn = 0.0;
-            if(bc == 2) vn = rM / p_Z_IND;
+
+            if(bc == 2){
+              vn = rM / p_Z_IND;
+            }
+
+            if(bc == 3){
+              const dlong idAcc = mapAcc[element*p_Nfp*p_Nfaces + n];
+              vn = LR[p_LRYinf] * rM;
+              // real poles
+              for(int pi = 0; pi < LRInfo[1]; ++pi){
+                rhsacc[LRInfo[0]*idAcc + pi] =
+                    -LR[p_LRLambda + pi] * acc[LRInfo[0]*idAcc + pi] + rM;
+                vn += LR[p_LRA + pi] * acc[LRInfo[0]*idAcc + pi];
+              }
+              // complex-conjugate pole pairs
+              for(int pi = LRInfo[1]; pi < LRInfo[0]; pi += 2){
+                const int pIdx = (pi - LRInfo[1]) / 2;
+                rhsacc[LRInfo[0]*idAcc + pi]   = -LR[p_LRAlpha+pIdx]*acc[LRInfo[0]*idAcc+pi]
+                                                  -LR[p_LRBeta +pIdx]*acc[LRInfo[0]*idAcc+pi+1] + rM;
+                rhsacc[LRInfo[0]*idAcc + pi+1] = -LR[p_LRAlpha+pIdx]*acc[LRInfo[0]*idAcc+pi+1]
+                                                  +LR[p_LRBeta +pIdx]*acc[LRInfo[0]*idAcc+pi];
+                vn += 2.0*(LR[p_LRB+pIdx]*acc[LRInfo[0]*idAcc+pi]
+                          +LR[p_LRC+pIdx]*acc[LRInfo[0]*idAcc+pi+1]);
+              }
+            }
+
             upwindBC(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux, vn);
 #else
             upwind(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux);
