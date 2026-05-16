@@ -55,7 +55,8 @@ void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, c
                   mesh.o_y,
                   mesh.o_z,
                   o_Q,
-                  o_RHS);
+                  o_RHS,
+                  o_acc, o_rhsacc, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
 
   traceHalo.ExchangeFinish(o_Q, 1);
 
@@ -72,5 +73,6 @@ void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, c
                   mesh.o_y,
                   mesh.o_z,
                   o_Q,
-                  o_RHS);
+                  o_RHS,
+                  o_acc, o_rhsacc, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
 }
