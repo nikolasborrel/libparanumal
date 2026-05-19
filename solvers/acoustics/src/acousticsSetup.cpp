@@ -132,7 +132,18 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   volumeKernel =  platform.buildKernel(fileName, kernelName,
                                          kernelInfo);
-  // LR BC setup — may add kernel defines; must happen before surface kernel JIT
+  // Safe defaults so the bc==3 branch in surface kernels compiles even when LR
+  // is not active. SetupLRBC overwrites these with the correct offsets when an
+  // LR vectorfit file is provided.
+  kernelInfo["defines/p_LRLambda"] = 0;
+  kernelInfo["defines/p_LRAlpha"]  = 0;
+  kernelInfo["defines/p_LRBeta"]   = 0;
+  kernelInfo["defines/p_LRA"]      = 0;
+  kernelInfo["defines/p_LRB"]      = 0;
+  kernelInfo["defines/p_LRC"]      = 0;
+  kernelInfo["defines/p_LRYinf"]   = 0;
+
+  // LR BC setup — may override defines above; must happen before surface kernel JIT
   SetupLRBC(kernelInfo);
 
   // Allocate minimal dummy LR buffers so the surface kernel never receives null

@@ -27,23 +27,23 @@ SOFTWARE.
 #include "acoustics.hpp"
 #include <cstdio>
 
-// LR vectorfit file format:
+// LR vectorfit file format (matches DTU libparanumal-dtu convention):
 //   line 1: NLRNpoles  NLRNRealPoles  NLRNImagPoles
-//   then NLRNRealPoles  lambda values (real pole decay rates)
-//   then NLRNImagPoles  alpha  values (imag pole real parts)
-//   then NLRNImagPoles  beta   values (imag pole imag parts)
 //   then NLRNRealPoles  A      values (real residues)
 //   then NLRNImagPoles  B      values (imag residues, real part)
 //   then NLRNImagPoles  C      values (imag residues, imag part)
+//   then NLRNRealPoles  lambda values (real pole decay rates, positive = decaying)
+//   then NLRNImagPoles  alpha  values (imag pole real parts)
+//   then NLRNImagPoles  beta   values (imag pole imag parts)
 //   then 1              Y_inf  value  (direct / instantaneous admittance)
 //
 // LR array storage layout (size = 1 + 2*NReal + 4*NImag):
-//   [p_LRLambda .. ]  NReal lambda
-//   [p_LRAlpha  .. ]  NImag alpha
-//   [p_LRBeta   .. ]  NImag beta
 //   [p_LRA      .. ]  NReal A
 //   [p_LRB      .. ]  NImag B
 //   [p_LRC      .. ]  NImag C
+//   [p_LRLambda .. ]  NReal lambda
+//   [p_LRAlpha  .. ]  NImag alpha
+//   [p_LRBeta   .. ]  NImag beta
 //   [p_LRYinf      ]  Y_inf
 
 void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
@@ -77,22 +77,22 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   LRInfo[1] = LRNRealPoles;
   LRInfo[2] = LRNImagPoles;
 
-  // p_LRLambda = 0
+  // p_LRA = 0
   for (dlong i = 0; i < LRNRealPoles; ++i)
     fscanf(fp, "%lf", &LR[i]);
-  dlong off = LRNRealPoles; // p_LRAlpha
-  for (dlong i = 0; i < LRNImagPoles; ++i)
-    fscanf(fp, "%lf", &LR[off + i]);
-  off += LRNImagPoles; // p_LRBeta
-  for (dlong i = 0; i < LRNImagPoles; ++i)
-    fscanf(fp, "%lf", &LR[off + i]);
-  off += LRNImagPoles; // p_LRA
-  for (dlong i = 0; i < LRNRealPoles; ++i)
-    fscanf(fp, "%lf", &LR[off + i]);
-  off += LRNRealPoles; // p_LRB
+  dlong off = LRNRealPoles; // p_LRB
   for (dlong i = 0; i < LRNImagPoles; ++i)
     fscanf(fp, "%lf", &LR[off + i]);
   off += LRNImagPoles; // p_LRC
+  for (dlong i = 0; i < LRNImagPoles; ++i)
+    fscanf(fp, "%lf", &LR[off + i]);
+  off += LRNImagPoles; // p_LRLambda
+  for (dlong i = 0; i < LRNRealPoles; ++i)
+    fscanf(fp, "%lf", &LR[off + i]);
+  off += LRNRealPoles; // p_LRAlpha
+  for (dlong i = 0; i < LRNImagPoles; ++i)
+    fscanf(fp, "%lf", &LR[off + i]);
+  off += LRNImagPoles; // p_LRBeta
   for (dlong i = 0; i < LRNImagPoles; ++i)
     fscanf(fp, "%lf", &LR[off + i]);
   off += LRNImagPoles; // p_LRYinf
@@ -143,12 +143,12 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   // ------------------------------------------------------------------ //
   //  Kernel defines for surface kernel
   // ------------------------------------------------------------------ //
-  const dlong pLRLambda = 0;
-  const dlong pLRAlpha  = LRNRealPoles;
-  const dlong pLRBeta   = LRNRealPoles   + LRNImagPoles;
-  const dlong pLRA      = LRNRealPoles   + 2*LRNImagPoles;
-  const dlong pLRB      = 2*LRNRealPoles + 2*LRNImagPoles;
-  const dlong pLRC      = 2*LRNRealPoles + 3*LRNImagPoles;
+  const dlong pLRA      = 0;
+  const dlong pLRB      = LRNRealPoles;
+  const dlong pLRC      = LRNRealPoles   + LRNImagPoles;
+  const dlong pLRLambda = LRNRealPoles   + 2*LRNImagPoles;
+  const dlong pLRAlpha  = 2*LRNRealPoles + 2*LRNImagPoles;
+  const dlong pLRBeta   = 2*LRNRealPoles + 3*LRNImagPoles;
   const dlong pLRYinf   = 2*LRNRealPoles + 4*LRNImagPoles;
 
   kernelInfo["defines/p_LRLambda"] = (int)pLRLambda;
