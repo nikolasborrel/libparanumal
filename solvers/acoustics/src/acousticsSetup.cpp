@@ -25,6 +25,7 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include "acousticsWriters.hpp"
 
 void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
                         acousticsSettings_t& _settings){
@@ -178,4 +179,53 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   // Setup receiver interpolation (builds kernel + allocates buffers)
   SetupReceivers();
+
+  // Setup HDF5/XDMF output writers
+  SetupHDF5Output();
+}
+
+void acoustics_t::SetupHDF5Output()
+{
+  outDir = ".";
+  if (settings.hasSetting("OUTPUT DIRECTORY"))
+    settings.getSetting("OUTPUT DIRECTORY", outDir);
+
+  simulationID = "acoustics";
+  if (settings.hasSetting("SIMULATION ID"))
+    settings.getSetting("SIMULATION ID", simulationID);
+
+  std::string fmt = "VTU";
+  if (settings.hasSetting("OUTPUT FORMAT"))
+    settings.getSetting("OUTPUT FORMAT", fmt);
+
+  if (fmt == "H5COMPACT")
+    outputFormat = OutputFormat::H5COMPACT;
+  else if (fmt == "XDMF")
+    outputFormat = OutputFormat::XDMF;
+  else
+    outputFormat = OutputFormat::VTU;
+
+  if (outputFormat == OutputFormat::VTU)
+    return;
+
+  // Precompute the vector of output times so writers can pre-allocate.
+  dfloat startTime, finalTime, outputInterval;
+  settings.getSetting("START TIME",      startTime);
+  settings.getSetting("FINAL TIME",      finalTime);
+  settings.getSetting("OUTPUT INTERVAL", outputInterval);
+
+  timeStepsOut.clear();
+  dfloat t = startTime;
+  while (t <= finalTime + outputInterval * 1e-10) {
+    timeStepsOut.push_back(t);
+    t += outputInterval;
+  }
+
+  // Construct writer only on rank 0 — all HDF5 I/O is single-rank.
+  if (mesh.rank == 0) {
+    if (outputFormat == OutputFormat::H5COMPACT)
+      h5Writer = std::make_unique<AcousticH5CompactWriter>(*this);
+    else
+      h5Writer = std::make_unique<AcousticXdmfWriter>(*this);
+  }
 }

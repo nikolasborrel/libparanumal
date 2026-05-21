@@ -211,7 +211,13 @@ void surfaceTerms(const int e,
                                   @restrict const  dfloat *  y,
                                   @restrict const  dfloat *  z,
                                   @restrict const  dfloat *  q,
-                                  @restrict dfloat *  rhsq){
+                                  @restrict        dfloat *  rhsq,
+                                  @restrict const  dfloat *  acc,
+                                  @restrict        dfloat *  rhsacc,
+                                  @restrict const  dlong  *  mapAcc,
+                                  @restrict const  dfloat *  LR,
+                                  @restrict const  dlong  *  LRInfo,
+                                  const dlong NLRPoints){
 
   // for all elements
   for(dlong eo=0;eo<Nelements;eo+=p_NblockS;@outer(0)){

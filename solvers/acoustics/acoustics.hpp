@@ -34,9 +34,17 @@ SOFTWARE.
 #include "timeStepper.hpp"
 #include "linAlg.hpp"
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #define DACOUSTICS LIBP_DIR"/solvers/acoustics/"
 
 using namespace libp;
+
+#include "src/acousticsWriters.hpp"
+
+enum class OutputFormat { VTU, H5COMPACT, XDMF };
 
 class acousticsSettings_t: public settings_t {
 public:
@@ -110,6 +118,13 @@ public:
 
   kernel_t updateKernelLR;
 
+  // HDF5/XDMF output
+  OutputFormat outputFormat = OutputFormat::VTU;
+  std::string  simulationID;
+  std::string  outDir;
+  std::vector<dfloat> timeStepsOut;  // precomputed output times (for XDMF header)
+  std::unique_ptr<IAcousticWriter> h5Writer;
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {
@@ -122,6 +137,7 @@ public:
 
   void SetupReceivers();
   void SetupLRBC(properties_t& kernelInfo);
+  void SetupHDF5Output();
 
   void Run();
 
@@ -132,6 +148,10 @@ public:
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
 
   dfloat MaxWaveSpeed();
+
+  // Write sampled receiver impulse responses to <SIMULATION ID>_receivers.h5
+  // (no-op if no receivers are configured). Includes sample rate + positions.
+  void WriteReceiverIRs();
 };
 
 #endif

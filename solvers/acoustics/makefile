@@ -80,9 +80,18 @@ endif
 #libraries
 ACOUSTICS_LIBP_LIBS=timeStepper mesh parAdogs ogs linAlg core
 
+# HDF5 / HighFive  (apt: libhdf5-dev — headers under /usr/include/hdf5/serial)
+HDF5_INC     ?= /usr/include/hdf5/serial
+HDF5_LIBDIR  ?= /usr/lib/x86_64-linux-gnu/hdf5/serial
+HIGHFIVE_DIR  = include
+
+HDF5_FLAGS    = -I$(HDF5_INC) -I$(HIGHFIVE_DIR)
+HDF5_LIBS     = -L$(HDF5_LIBDIR) -lhdf5
+
 #includes
 INCLUDES=${LIBP_INCLUDES} \
-				 -I.
+				 -I. \
+         $(HDF5_FLAGS)
 
 #defines
 DEFINES =${LIBP_DEFINES} \
@@ -93,7 +102,8 @@ ACOUSTICS_CXXFLAGS=${LIBP_CXXFLAGS} ${DEFINES} ${INCLUDES}
 
 #link libraries
 LIBS=-L${LIBP_LIBS_DIR} $(addprefix -l,$(ACOUSTICS_LIBP_LIBS)) \
-     ${LIBP_LIBS}
+     ${LIBP_LIBS} \
+     $(HDF5_LIBS)
 
 #link flags
 LFLAGS=${ACOUSTICS_CXXFLAGS} ${LIBS}

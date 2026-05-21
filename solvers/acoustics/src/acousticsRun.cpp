@@ -147,6 +147,9 @@ void acoustics_t::Run(){
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
 
+  // Write receiver impulse responses to HDF5 (no-op if no receivers configured)
+  WriteReceiverIRs();
+
   // output norm of final solution
   {
     //compute q.M*q
