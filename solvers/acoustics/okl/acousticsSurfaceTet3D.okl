@@ -42,13 +42,14 @@ void upwind(const dfloat nx,
             dfloat *vflux,
             dfloat *wflux){
 
-  //subtract F(qM)
+  //subtract F(qM) — dimensional upwind flux (wave speed c, impedance rho*c).
+  // Reduces to the c=1 form when p_AcConstant=p_c=p_rho=1.
   dfloat ndotUM = nx*uM + ny*vM + nz*wM;
   dfloat ndotUP = nx*uP + ny*vP + nz*wP;
-  *rflux  = p_half*   (ndotUP-ndotUM - (rP-rM));
-  *uflux  = p_half*nx*(rP-rM         - (ndotUP-ndotUM));
-  *vflux  = p_half*ny*(rP-rM         - (ndotUP-ndotUM));
-  *wflux  = p_half*nz*(rP-rM         - (ndotUP-ndotUM));
+  *rflux  = p_half*   ((ndotUP-ndotUM)*p_AcConstant - (rP-rM)*p_c);
+  *uflux  = p_half*nx*((rP-rM)/p_rho                - (ndotUP-ndotUM)*p_c);
+  *vflux  = p_half*ny*((rP-rM)/p_rho                - (ndotUP-ndotUM)*p_c);
+  *wflux  = p_half*nz*((rP-rM)/p_rho                - (ndotUP-ndotUM)*p_c);
 
 }
 
