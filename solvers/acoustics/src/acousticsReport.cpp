@@ -56,11 +56,13 @@ void acoustics_t::Report(dfloat time, int tstep){
     // copy data back to host
     o_q.copyTo(q);
 
-    // output field files
+    // output field files (honor OUTPUT DIRECTORY, like the HDF5/XDMF writers)
     std::string name;
     settings.getSetting("OUTPUT FILE NAME", name);
+    const std::string& dir = outDir.empty() ? std::string(".") : outDir;
     char fname[BUFSIZ];
-    sprintf(fname, "%s_%04d_%04d.vtu", name.c_str(), mesh.rank, frame++);
+    snprintf(fname, sizeof(fname), "%s/%s_%04d_%04d.vtu",
+             dir.c_str(), name.c_str(), mesh.rank, frame++);
 
     PlotFields(q, std::string(fname));
   }

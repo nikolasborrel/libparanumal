@@ -54,3 +54,16 @@ TRUE
 
 [OUTPUT FILE NAME]
 acoustics
+
+# Write wave-field snapshots as HDF5 + XDMF for ParaView (open the .xdmf with
+# the "XDMF Reader" or "Xdmf3 Reader T" — the temporal reader). Output files
+# (<SIMULATION ID>.h5/.xdmf, and *_receivers.h5 if receivers configured) are
+# written under OUTPUT DIRECTORY, which must exist before running.
+[OUTPUT FORMAT]
+XDMF
+
+[OUTPUT DIRECTORY]
+out/
+
+[SIMULATION ID]
+acoustics_hex
