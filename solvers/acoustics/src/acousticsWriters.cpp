@@ -94,6 +94,91 @@ void acoustics_t::WriteReceiverIRs() {
            path.c_str(), nRecv, nSamples, sampleRateOut);
 }
 
+// ---------------------------------------------------------------------------
+// WriteDataGrid — persist the jittered PPW sample grid for ML dataset use to
+// <OUTPUT DIRECTORY>/<DATA SIMULATION ID>_data.h5 containing:
+//   /coordinates  [NDataPoints x 3]        jittered sample-point XYZ (physical)
+//   /pressures    [nFrames x NDataPoints]  pressure at each sample point per frame
+//   /times        [nFrames]                actual sample times
+// with attributes on /pressures: dx, fmax, spatial_ppw, jitter_frac, seed.
+// Orthogonal to the visualization writers — never coupled to OUTPUT INTERVAL.
+// ---------------------------------------------------------------------------
+void acoustics_t::WriteDataGrid() {
+  if (!dataGenEnabled) return;
+  const bool haveQuery  = (NDataPoints > 0 && dataSampleIdx > 0);
+  const bool haveSource = (NSrcPoints  > 0);
+  if (!haveQuery && !haveSource) return;
+
+  const std::string dir = outDir.empty() ? std::string(".") : outDir;
+  const std::string path = dir + "/" + dataSimID + "_data.h5";
+
+  File file(path, File::Overwrite);
+
+  // --- query / output grid (DeepONet trunk): /mesh + /pressures over time ---
+  // Datasets mirror the DTU layout (/mesh, /pressures with a time_steps attr).
+  if (haveQuery) {
+    o_dataVals.copyTo(dataVals);    // host layout [point * NDataSamples + frame]
+    const size_t nFrames = static_cast<size_t>(dataSampleIdx);
+    const size_t nPts    = static_cast<size_t>(NDataPoints);
+
+    std::vector<std::vector<float>> mesh1d(nPts, std::vector<float>(3));
+    for (size_t p = 0; p < nPts; ++p) {
+      mesh1d[p][0] = static_cast<float>(dataXYZ[p*3+0]);
+      mesh1d[p][1] = static_cast<float>(dataXYZ[p*3+1]);
+      mesh1d[p][2] = static_cast<float>(dataXYZ[p*3+2]);
+    }
+    // frame-major [nFrames x nPts]
+    std::vector<std::vector<float>> pres(nFrames, std::vector<float>(nPts));
+    for (size_t f = 0; f < nFrames; ++f)
+      for (size_t p = 0; p < nPts; ++p)
+        pres[f][p] = static_cast<float>(dataVals[p * NDataSamples + f]);
+
+    file.createDataSet<float>("/mesh",      DataSpace::From(mesh1d)).write(mesh1d);
+    file.createDataSet<float>("/pressures", DataSpace::From(pres)).write(pres);
+
+    H5Easy::dumpAttribute(file, "/pressures", "time_steps",  dataTimes);
+    H5Easy::dumpAttribute(file, "/pressures", "dx",          static_cast<double>(dataDx));
+    H5Easy::dumpAttribute(file, "/pressures", "fmax",        static_cast<double>(dataFmax));
+    H5Easy::dumpAttribute(file, "/pressures", "spatial_ppw", static_cast<double>(dataPPW));
+    H5Easy::dumpAttribute(file, "/pressures", "jitter_frac", static_cast<double>(dataJitter));
+    H5Easy::dumpAttribute(file, "/pressures", "seed",        dataSeed);
+    H5Easy::dumpAttribute(file, "/pressures", "n_frames",    static_cast<int>(nFrames));
+    H5Easy::dumpAttribute(file, "/pressures", "n_points",    static_cast<int>(nPts));
+  }
+
+  // --- source grid (DeepONet branch): /umesh + /upressures (IC), DTU layout ---
+  if (haveSource) {
+    const size_t nu = static_cast<size_t>(NSrcPoints);
+    std::vector<std::vector<float>> umesh(nu, std::vector<float>(3));
+    std::vector<float> upres(nu);
+    for (size_t p = 0; p < nu; ++p) {
+      umesh[p][0] = static_cast<float>(srcGridXYZ[p*3+0]);
+      umesh[p][1] = static_cast<float>(srcGridXYZ[p*3+1]);
+      umesh[p][2] = static_cast<float>(srcGridXYZ[p*3+2]);
+      upres[p]    = srcGridVals[p];
+    }
+    file.createDataSet<float>("/umesh",      DataSpace::From(umesh)).write(umesh);
+    file.createDataSet<float>("/upressures", DataSpace::From(upres)).write(upres);
+
+    std::vector<int> umesh_shape = {srcShape[0], srcShape[1], srcShape[2]};
+    H5Easy::dumpAttribute(file, "/umesh", "umesh_shape", umesh_shape);
+    H5Easy::dumpAttribute(file, "/umesh", "source_ppw",  static_cast<double>(srcPPW));
+    H5Easy::dumpAttribute(file, "/umesh", "jitter_frac", static_cast<double>(srcJitter));
+
+    std::vector<float> src_pos = {static_cast<float>(srcX),
+                                  static_cast<float>(srcY),
+                                  static_cast<float>(srcZ)};
+    file.createDataSet<float>("/source_position", DataSpace::From(src_pos)).write(src_pos);
+  }
+
+  if (mesh.rank == 0)
+    printf("  wrote %s (query %lld pts x %lld frames; source %lld pts %dx%dx%d)\n",
+           path.c_str(),
+           (long long)(haveQuery ? NDataPoints : 0),
+           (long long)(haveQuery ? dataSampleIdx : 0),
+           (long long)(haveSource ? NSrcPoints : 0),
+           srcShape[0], srcShape[1], srcShape[2]);
+}
 
 // ---------------------------------------------------------------------------
 // extractUniquePoints

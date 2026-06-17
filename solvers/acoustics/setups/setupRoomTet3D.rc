@@ -58,9 +58,14 @@ LSERK4
 [FREQINDEP IMPEDANCE]
 415.0
 
+# --- Output settings (visualization snapshots; independent of data generation) ---
+# OUTPUT INTERVAL [s] sets the snapshot cadence written by Report() to VTU
+# (OUTPUT TO FILE) and the HDF5/XDMF writer (OUTPUT FORMAT). Data generation, if
+# enabled via [DATA CONFIG FILE], has its own cadence and ignores these.
 [OUTPUT INTERVAL]
 0.01
 
+# VTU visualization output (independent of OUTPUT FORMAT / HDF5).
 [OUTPUT TO FILE]
 FALSE
 

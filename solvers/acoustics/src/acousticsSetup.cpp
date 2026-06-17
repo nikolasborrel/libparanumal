@@ -214,12 +214,15 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
   SetupReceivers();
 
   // Compute the explicit time step now so the visualization (OUTPUT INTERVAL)
-  // snapshot cadence can be clamped to what the solver can actually deliver.
-  // Reused verbatim in Run().
+  // and data-gen (DATA TEMPORAL PPW) cadences can be clamped to what the solver
+  // can actually deliver. Reused verbatim in Run().
   ComputeTimeStep();
 
   // Setup HDF5/XDMF output writers
   SetupHDF5Output();
+
+  // Setup ML data-generation sampler (no-op unless DATA OUTPUT is TRUE)
+  SetupDataGen();
 }
 
 void acoustics_t::Logf(const char* fmt, ...)
@@ -263,21 +266,33 @@ void acoustics_t::SetupHDF5Output()
   // survive beyond the console. Set before any Logf() call below.
   logPath = (outDir.empty() ? std::string(".") : outDir) + "/" + simulationID + ".log";
 
-  // Wave-field snapshot format (independent of VTU, which is OUTPUT TO FILE).
+  // Wave-field HDF5/XDMF output is exclusively a data-generation feature: it is
+  // selected by OUTPUT FORMAT, which lives in the data config (DATA CONFIG FILE)
+  // and is MANDATORY there. Standalone runs (no data config) can only ever write
+  // the VTU visualization common to all solvers (OUTPUT TO FILE), which is
+  // orthogonal — so OUTPUT FORMAT must not appear in a parent config.
+  std::string dataConfig;
+  if (settings.hasSetting("DATA CONFIG FILE"))
+    settings.getSetting("DATA CONFIG FILE", dataConfig);
+  const bool dataGen = !dataConfig.empty();
+
   std::string fmt = "NONE";
   if (settings.hasSetting("OUTPUT FORMAT"))
     settings.getSetting("OUTPUT FORMAT", fmt);
 
-  if (fmt == "H5COMPACT")
-    outputFormat = OutputFormat::H5COMPACT;
-  else if (fmt == "XDMF")
-    outputFormat = OutputFormat::XDMF;
-  else
+  if (!dataGen) {
+    // No data config → no wave-field output, ever. Reject a stray OUTPUT FORMAT
+    // so it can't silently look like it would write snapshots.
+    LIBP_ABORT("OUTPUT FORMAT belongs in the data config (wave-field HDF5/XDMF "
+               "is data-gen only); standalone runs use VTU via OUTPUT TO FILE",
+               fmt != "NONE");
     outputFormat = OutputFormat::NONE;
-
-  // No wave-field output requested; VTU (OUTPUT TO FILE) is handled in Report().
-  if (outputFormat == OutputFormat::NONE)
     return;
+  }
+
+  LIBP_ABORT("OUTPUT FORMAT is mandatory in the data config — set H5COMPACT or XDMF",
+             fmt != "H5COMPACT" && fmt != "XDMF");
+  outputFormat = (fmt == "H5COMPACT") ? OutputFormat::H5COMPACT : OutputFormat::XDMF;
 
   // Precompute the vector of output times so writers can pre-allocate.
   dfloat startTime, finalTime, outputInterval;

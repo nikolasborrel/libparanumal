@@ -1,0 +1,49 @@
+[FORMAT]
+2.0
+
+# -----------------------------------------------------------------------------
+# Modular data-generation config (referenced from a setup via [DATA CONFIG FILE]).
+# Train/val/test splits share the main mesh/physics/visualization setup and swap
+# only this file — typically just [DATA SEED] and [DATA SIMULATION ID], and
+# optionally [SPATIAL PPW DATA]. Coordinates are jittered so the ML model does
+# not overfit to a fixed grid.
+# -----------------------------------------------------------------------------
+
+# Data-gen is enabled simply because the main setup references this file via
+# [DATA CONFIG FILE] — no on/off flag here. FMAX lives in the main setup (shared
+# with the source/IC). VTU visualization is controlled in the main setup.
+#
+# Wave-field snapshot format — MANDATORY here. H5COMPACT = single-file
+# /pressures[nFrames x N]; XDMF = per-step datasets + ParaView sidecar.
+[OUTPUT FORMAT]
+XDMF
+
+# Spatial points-per-wavelength for the sample grid (PPW of FMAX).
+[SPATIAL PPW DATA]
+4
+
+# Temporal samples per period at DATA FMAX (>= 2 for Nyquist).
+[DATA TEMPORAL PPW]
+2
+
+# Coordinate jitter as a fraction of dx: offset ~ Uniform(-f*dx, +f*dx) per axis.
+[DATA JITTER]
+0.5
+
+# Rectilinear SOURCE grid (DeepONet branch input): the initial condition sampled
+# on a uniform PPW grid, written as /umesh + /upressures (DTU-compatible layout).
+# (DTU's MESH_RECTILINEAR_PPW.) <=0 disables source-grid output.
+[DATA SOURCE PPW]
+2
+
+# Source-grid jitter as a fraction of dx (default 0 = uniform rectilinear grid).
+[DATA SOURCE JITTER]
+0
+
+# RNG seed for the jitter — vary across dataset splits.
+[DATA SEED]
+0
+
+# Stem name for the <id>_data.h5 file.
+[DATA SIMULATION ID]
+acoustics_train

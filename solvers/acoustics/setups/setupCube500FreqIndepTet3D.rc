@@ -1,0 +1,71 @@
+[FORMAT]
+2.0
+
+# 500 Hz unit-cube room, frequency-independent impedance walls.
+# Ported from libparanumal-dtu setup_cube_500hz_freq_indep.
+# Writes wave-field snapshots as HDF5 + XDMF for visualization in ParaView.
+# (DTU LRVECTFIT / ERVECTFIT inputs are intentionally omitted — not used here.)
+
+[DATA FILE]
+data/acousticsCubeRoom3D.h
+
+[MESH FILE]
+../../meshes/cube_500hz_p4_5ppw_freq_indep.msh
+
+[MESH DIMENSION]
+3
+
+[ELEMENT TYPE] # number of edges
+6
+
+[POLYNOMIAL DEGREE]
+4
+
+[THREAD MODEL]
+CUDA
+
+[PLATFORM NUMBER]
+0
+
+[DEVICE NUMBER]
+0
+
+[TIME INTEGRATOR]
+LSERK4
+
+[START TIME]
+0
+
+[FINAL TIME]
+1.0
+
+[CFL NUMBER]
+1.0
+
+[DENSITY]
+1.2
+
+[SPEED OF SOUND]
+343.0
+
+# Boundary surfaces are tagged "Frequency Independent" (flag 2) in the mesh.
+# Surface impedance from the DTU setup ([Z_IND] = 7400).
+[FREQINDEP IMPEDANCE]
+7400.0
+
+# --- Output settings (visualization snapshots) ---
+# OUTPUT INTERVAL [s] sets the VTU snapshot cadence written by Report().
+[OUTPUT INTERVAL]
+0.001
+
+# VTU visualization output (common to all solvers). This is a standalone run with
+# no DATA CONFIG FILE, so VTU is the only available output; HDF5/XDMF wave-field
+# output (OUTPUT FORMAT) is a data-generation feature and lives in the data config.
+[OUTPUT TO FILE]
+TRUE
+
+[OUTPUT DIRECTORY]
+out/
+
+[SIMULATION ID]
+cube_500hz_p4_5ppw_freq_indep
