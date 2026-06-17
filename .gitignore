@@ -6,6 +6,7 @@
 !*/*/Makefile
 !LICENSE
 
+out/
 *.o
 *.a
 .DS_STORE

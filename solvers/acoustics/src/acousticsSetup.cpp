@@ -26,6 +26,13 @@ SOFTWARE.
 
 #include "acoustics.hpp"
 #include "acousticsWriters.hpp"
+#include <algorithm>
+#include <cmath>
+#include <cstdarg>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
                         acousticsSettings_t& _settings){
@@ -39,7 +46,29 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   settings.getSetting("DENSITY", rho);
   settings.getSetting("SPEED OF SOUND", c);
+  settings.getSetting("FMAX", fmax);
   settings.getSetting("FREQINDEP IMPEDANCE", ZFreqIndep);
+
+  // Gaussian source width: explicit SXYZ if given (>0), else from FMAX using the
+  // DTU convention sigma = c / (pi*fmax/2) = 2c/(pi*fmax). Exposed to FMAX-driven
+  // initial-condition headers as the kernel define p_sigma0.
+  dfloat sxyz = 0.0;
+  settings.getSetting("SXYZ", sxyz);
+  sigma0 = (sxyz > 0.0) ? sxyz : c / (M_PI * fmax / 2.0);
+
+  // Source center: parse "x y z" (defaults to the origin if absent/malformed).
+  srcX = srcY = srcZ = 0.0;
+  if (settings.hasSetting("SOURCE POSITION")) {
+    std::string srcStr;
+    settings.getSetting("SOURCE POSITION", srcStr);
+    std::istringstream iss(srcStr);
+    iss >> srcX >> srcY >> srcZ;
+  }
+  if (mesh.rank == 0)
+    printf("Source: Gaussian at (%g, %g, %g) m, width sigma0 = %g m "
+           "(%s; fmax=%g Hz, c=%g m/s)\n",
+           srcX, srcY, srcZ, sigma0,
+           (sxyz > 0.0) ? "from SXYZ" : "from FMAX", fmax, c);
 
   dlong Nlocal = mesh.Nelements*mesh.Np*Nfields;
   dlong Nhalo  = mesh.totalHaloPairs*mesh.Np*Nfields;
@@ -96,6 +125,10 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
   kernelInfo["defines/" "p_c"]= c;
   kernelInfo["defines/" "p_AcConstant"]= rho*c*c;
   kernelInfo["defines/" "p_Z_IND"]= ZFreqIndep;
+  kernelInfo["defines/" "p_sigma0"]= sigma0;
+  kernelInfo["defines/" "p_srcX"]= srcX;
+  kernelInfo["defines/" "p_srcY"]= srcY;
+  kernelInfo["defines/" "p_srcZ"]= srcZ;
 
   int maxNodes = std::max(mesh.Np, (mesh.Nfp*mesh.Nfaces));
   kernelInfo["defines/" "p_maxNodes"]= maxNodes;
@@ -180,8 +213,32 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
   // Setup receiver interpolation (builds kernel + allocates buffers)
   SetupReceivers();
 
+  // Compute the explicit time step now so the visualization (OUTPUT INTERVAL)
+  // snapshot cadence can be clamped to what the solver can actually deliver.
+  // Reused verbatim in Run().
+  ComputeTimeStep();
+
   // Setup HDF5/XDMF output writers
   SetupHDF5Output();
+}
+
+void acoustics_t::Logf(const char* fmt, ...)
+{
+  if (mesh.rank != 0) return;
+
+  char buf[2048];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  fputs(buf, stdout);
+  fflush(stdout);
+
+  if (logPath.empty()) return;
+  std::ofstream ofs(logPath, logOpened ? std::ios::app : std::ios::trunc);
+  logOpened = true;
+  ofs << buf;
 }
 
 void acoustics_t::SetupHDF5Output()
@@ -190,11 +247,24 @@ void acoustics_t::SetupHDF5Output()
   if (settings.hasSetting("OUTPUT DIRECTORY"))
     settings.getSetting("OUTPUT DIRECTORY", outDir);
 
+  // Create the output directory if it doesn't exist — every output path writes
+  // here: VTU (Report), HDF5/XDMF wave field, receiver IRs, and data-gen grids.
+  // error_code overload so a benign race between ranks doesn't throw.
+  if (!outDir.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(outDir, ec);
+  }
+
   simulationID = "acoustics";
   if (settings.hasSetting("SIMULATION ID"))
     settings.getSetting("SIMULATION ID", simulationID);
 
-  std::string fmt = "VTU";
+  // Run log mirrors key diagnostics (cadence, warnings/errors) to a file so they
+  // survive beyond the console. Set before any Logf() call below.
+  logPath = (outDir.empty() ? std::string(".") : outDir) + "/" + simulationID + ".log";
+
+  // Wave-field snapshot format (independent of VTU, which is OUTPUT TO FILE).
+  std::string fmt = "NONE";
   if (settings.hasSetting("OUTPUT FORMAT"))
     settings.getSetting("OUTPUT FORMAT", fmt);
 
@@ -203,9 +273,10 @@ void acoustics_t::SetupHDF5Output()
   else if (fmt == "XDMF")
     outputFormat = OutputFormat::XDMF;
   else
-    outputFormat = OutputFormat::VTU;
+    outputFormat = OutputFormat::NONE;
 
-  if (outputFormat == OutputFormat::VTU)
+  // No wave-field output requested; VTU (OUTPUT TO FILE) is handled in Report().
+  if (outputFormat == OutputFormat::NONE)
     return;
 
   // Precompute the vector of output times so writers can pre-allocate.
@@ -214,11 +285,22 @@ void acoustics_t::SetupHDF5Output()
   settings.getSetting("FINAL TIME",      finalTime);
   settings.getSetting("OUTPUT INTERVAL", outputInterval);
 
+  // The solver cannot emit snapshots more often than one per time step. If a
+  // finer OUTPUT INTERVAL is requested, clamp it to dt — otherwise the output
+  // loop drifts and writes far fewer frames than the header declares, leaving
+  // the XDMF/VTU series referencing snapshots that were never written.
+  const dfloat effectiveInterval = std::max(outputInterval, dt);
+  Logf("Visualization cadence: solver dt=%.4g s, requested OUTPUT INTERVAL="
+       "%.4g s -> effective %.4g s\n", dt, outputInterval, effectiveInterval);
+  if (outputInterval < dt)
+    Logf("WARNING: OUTPUT INTERVAL=%.4g s could not be met (solver dt=%.4g s), "
+         "clamped to %.4g s\n", outputInterval, dt, effectiveInterval);
+
   timeStepsOut.clear();
   dfloat t = startTime;
-  while (t <= finalTime + outputInterval * 1e-10) {
+  while (t <= finalTime + effectiveInterval * 1e-10) {
     timeStepsOut.push_back(t);
-    t += outputInterval;
+    t += effectiveInterval;
   }
 
   // Construct writer only on rank 0 — all HDF5 I/O is single-rank.

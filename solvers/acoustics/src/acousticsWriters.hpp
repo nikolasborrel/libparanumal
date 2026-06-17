@@ -49,6 +49,10 @@ class IAcousticWriter {
 public:
     virtual ~IAcousticWriter() = default;
     virtual void write(acoustics_t& ac, int iter) = 0;
+    // Called once after the time loop to flush metadata that depends on the
+    // number of frames actually written (e.g. the XDMF temporal-collection
+    // header). Default is a no-op.
+    virtual void finalize(acoustics_t& ac) {}
 };
 
 // Writes all timesteps as a single chunked 2-D HDF5 dataset:
@@ -63,6 +67,7 @@ public:
 private:
     std::string _filepathH5;
     HighFive::DataSet _pressureDataset;
+    size_t      _nFrames = 0;  // rows preallocated in /pressures
 
     void writeMesh(const std::string& filepathH5,
                    std::vector<float>& x1d,
@@ -79,9 +84,13 @@ class AcousticXdmfWriter : public IAcousticWriter {
 public:
     explicit AcousticXdmfWriter(acoustics_t& ac);
     void write(acoustics_t& ac, int iter) override;
+    // Writes the XDMF sidecar from the frames actually produced (ac.outputTimes).
+    void finalize(acoustics_t& ac) override;
 
 private:
     std::string _filepathH5;
+    std::string _filepathXdmf;
+    std::string _filenameH5;
     size_t      _Nnodes = 0;
 
     void writeXdmfHeader(acoustics_t& ac, size_t Nnodes,

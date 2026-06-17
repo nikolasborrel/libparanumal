@@ -88,9 +88,10 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "Directory for field/receiver output files");
 
   newSetting("OUTPUT FORMAT",
-             "VTU",
-             "Output format for wave-field snapshots",
-             {"VTU", "H5COMPACT", "XDMF"});
+             "NONE",
+             "HDF5 wave-field snapshot format (independent of VTU output, which is "
+             "controlled by OUTPUT TO FILE). NONE disables HDF5 output.",
+             {"NONE", "H5COMPACT", "XDMF"});
 
   newSetting("SIMULATION ID",
              "acoustics",

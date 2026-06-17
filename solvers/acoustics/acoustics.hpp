@@ -44,7 +44,10 @@ using namespace libp;
 
 #include "src/acousticsWriters.hpp"
 
-enum class OutputFormat { VTU, H5COMPACT, XDMF };
+// Wave-field HDF5 snapshot format. VTU is NOT a member: VTU visualization is an
+// independent output path controlled by OUTPUT TO FILE (shared with other
+// solvers), and may be written alongside an HDF5 format.
+enum class OutputFormat { NONE, H5COMPACT, XDMF };
 
 class acousticsSettings_t: public settings_t {
 public:
@@ -62,6 +65,9 @@ public:
   int Nfields;
 
   dfloat rho, c;        // medium density [kg/m^3] and speed of sound [m/s]
+  dfloat fmax;          // max frequency of interest [Hz] (source/mesh property)
+  dfloat sigma0;        // Gaussian source width [m] = SXYZ or 2c/(pi*fmax)
+  dfloat srcX, srcY, srcZ;  // Gaussian source center [m] (SOURCE POSITION)
   dfloat ZFreqIndep;    // acoustic impedance for frequency-independent BC [Pa·s/m]
 
   timeStepper_t timeStepper;
@@ -119,10 +125,15 @@ public:
   kernel_t updateKernelLR;
 
   // HDF5/XDMF output
-  OutputFormat outputFormat = OutputFormat::VTU;
+  OutputFormat outputFormat = OutputFormat::NONE;
   std::string  simulationID;
   std::string  outDir;
-  std::vector<dfloat> timeStepsOut;  // precomputed output times (for XDMF header)
+  std::string  logPath;            // <outDir>/<simID>.log mirror of key diagnostics
+  bool         logOpened = false;  // truncate on first write, append thereafter
+  std::vector<dfloat> timeStepsOut;  // precomputed (clamped) output times for preallocation
+  std::vector<dfloat> outputTimes;   // actual wave-field output times (XDMF header finalize)
+  int    outputFrame = 0;            // wave-field frames written so far
+  dfloat dt = 0.0;                   // explicit solver time step (set in Setup)
   std::unique_ptr<IAcousticWriter> h5Writer;
 
   acoustics_t() = default;
@@ -139,6 +150,10 @@ public:
   void SetupLRBC(properties_t& kernelInfo);
   void SetupHDF5Output();
 
+  // printf-style diagnostic that (on rank 0) prints to stdout AND appends to the
+  // run log file (logPath). Truncates the log on first use. No-op off rank 0.
+  void Logf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+
   void Run();
 
   void Report(dfloat time, int tstep);
@@ -148,6 +163,10 @@ public:
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
 
   dfloat MaxWaveSpeed();
+
+  // Compute the explicit CFL time step from the mesh / wave speed and store it
+  // in `dt`. Called in Setup() so output cadences can be clamped to it.
+  void ComputeTimeStep();
 
   // Write sampled receiver impulse responses to <SIMULATION ID>_receivers.h5
   // (no-op if no receivers are configured). Includes sample rate + positions.

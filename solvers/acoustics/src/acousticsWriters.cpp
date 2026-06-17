@@ -94,6 +94,7 @@ void acoustics_t::WriteReceiverIRs() {
            path.c_str(), nRecv, nSamples, sampleRateOut);
 }
 
+
 // ---------------------------------------------------------------------------
 // extractUniquePoints
 // ---------------------------------------------------------------------------
@@ -190,6 +191,7 @@ AcousticH5CompactWriter::AcousticH5CompactWriter(acoustics_t& ac)
 
   size_t nFrames = ac.timeStepsOut.size();
   size_t nPts    = x1d.size();
+  _nFrames = nFrames;
 
   DataSetCreateProps props;
   props.add(Chunking(std::vector<hsize_t>{1, static_cast<hsize_t>(nPts)}));
@@ -213,6 +215,10 @@ void AcousticH5CompactWriter::write(acoustics_t& ac, int iter)
 
   ac.o_q.copyTo(ac.q);
   extractUniquePoints(ac, conn, x1d, y1d, z1d, p1d);
+
+  // Guard against emitting more frames than were preallocated (boundary
+  // floating-point rounding in the output-crossing logic).
+  if (static_cast<size_t>(iter) >= _nFrames) return;
 
   _pressureDataset.select({static_cast<size_t>(iter), 0},
                           {1, p1d.size()}).write(p1d);
@@ -259,11 +265,13 @@ void AcousticXdmfWriter::writeXdmfHeader(acoustics_t& ac,
   ofs << "  <Domain>\n";
   ofs << "    <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">\n";
 
-  for (size_t i = 0; i < ac.timeStepsOut.size(); ++i) {
+  // Build one temporal grid per frame that was actually written to the HDF5 file
+  // (ac.outputTimes), so the series never references a /dataN that is missing.
+  for (size_t i = 0; i < ac.outputTimes.size(); ++i) {
     std::string tag = "/data" + std::to_string(i + 2);
     ofs << "      <Grid>\n";
     ofs << "        <include xpointer=\"xpointer(//Grid[@Name=&quot;mesh&quot;]/*[self::Topology or self::Geometry])\" />\n";
-    ofs << "        <Time Value=\"" << ac.timeStepsOut[i] << "\" />\n";
+    ofs << "        <Time Value=\"" << ac.outputTimes[i] << "\" />\n";
     ofs << "        <Attribute Name=\"p\" AttributeType=\"Scalar\" Center=\"Node\">\n";
     ofs << "          <DataItem DataType=\"Float\" Dimensions=\"" << Nnodes << "\" Format=\"HDF\" Precision=\"8\">\n";
     ofs << "            " << filenameH5 << ":" << tag << "\n";
@@ -295,8 +303,9 @@ AcousticXdmfWriter::AcousticXdmfWriter(acoustics_t& ac)
   if (ac.settings.hasSetting("SIMULATION ID"))
     ac.settings.getSetting("SIMULATION ID", simID);
 
-  std::string filenameH5 = simID + ".h5";
-  _filepathH5 = ac.outDir + "/" + filenameH5;
+  _filenameH5  = simID + ".h5";
+  _filepathH5  = ac.outDir + "/" + _filenameH5;
+  _filepathXdmf = ac.outDir + "/" + simID + ".xdmf";
 
   auto conn  = std::vector<std::vector<unsigned int>>();
   auto x1d   = std::vector<float>();
@@ -309,8 +318,9 @@ AcousticXdmfWriter::AcousticXdmfWriter(acoustics_t& ac)
 
   writeMesh(_filepathH5, x1d, y1d, z1d, File::Overwrite);
 
-  std::string filepathXdmf = ac.outDir + "/" + simID + ".xdmf";
-  writeXdmfHeader(ac, _Nnodes, filepathXdmf, filenameH5);
+  // The XDMF sidecar is written in finalize(), once the number of frames
+  // actually produced is known (ac.outputTimes). Writing it here would bake in
+  // the planned frame count, which can exceed what the run emits.
 }
 
 void AcousticXdmfWriter::write(acoustics_t& ac, int iter)
@@ -327,4 +337,10 @@ void AcousticXdmfWriter::write(acoustics_t& ac, int iter)
   std::string tag = "/data" + std::to_string(iter + 2);
   H5Easy::File file(_filepathH5, H5Easy::File::OpenOrCreate);
   H5Easy::dump(file, tag, p1d);
+}
+
+void AcousticXdmfWriter::finalize(acoustics_t& ac)
+{
+  // Emit the temporal-collection header for exactly the frames written.
+  writeXdmfHeader(ac, _Nnodes, _filepathXdmf, _filenameH5);
 }

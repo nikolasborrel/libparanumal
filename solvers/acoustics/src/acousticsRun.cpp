@@ -25,6 +25,8 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <algorithm>
+#include <cmath>
 
 // LSERK4 coefficients (Carpenter & Kennedy, 1994 — 5-stage 4th-order)
 static const dfloat _lserk4_rka[5] = {
@@ -63,12 +65,8 @@ void acoustics_t::Run(){
                          mesh.o_z,
                          o_q);
 
-  dfloat cfl=1.0;
-  settings.getSetting("CFL NUMBER", cfl);
-
-  dfloat hmin = mesh.MinCharacteristicLength();
-  dfloat vmax = MaxWaveSpeed();
-  dfloat dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
+  // dt (member) was computed in Setup (ComputeTimeStep) so the output cadence
+  // could be clamped to it; reuse the identical value here.
   timeStepper.SetTimeStep(dt);
 
   if (NLRPoints > 0) {
@@ -95,6 +93,10 @@ void acoustics_t::Run(){
 
     dfloat outputInterval;
     settings.getSetting("OUTPUT INTERVAL", outputInterval);
+    // Cannot output more often than one snapshot per step: clamp to dt so the
+    // output-crossing logic below stays ahead of `time` and emits every frame
+    // (matches the clamped timeStepsOut / XDMF header). See SetupHDF5Output().
+    outputInterval = std::max(outputInterval, dt);
     dfloat outputTime = startTime + outputInterval;
     dfloat time = startTime;
     int tstep = 0;
@@ -146,6 +148,11 @@ void acoustics_t::Run(){
   } else {
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
+
+  // Finalize wave-field output: write the XDMF header from the frames actually
+  // written (ac.outputTimes), so the time series never references missing data.
+  if (outputFormat != OutputFormat::NONE && mesh.rank == 0 && h5Writer)
+    h5Writer->finalize(*this);
 
   // Write receiver impulse responses to HDF5 (no-op if no receivers configured)
   WriteReceiverIRs();

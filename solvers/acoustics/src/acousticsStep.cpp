@@ -30,6 +30,15 @@ dfloat acoustics_t::MaxWaveSpeed(){
   return c;
 }
 
+void acoustics_t::ComputeTimeStep(){
+  dfloat cfl = 1.0;
+  settings.getSetting("CFL NUMBER", cfl);
+
+  const dfloat hmin = mesh.MinCharacteristicLength();
+  const dfloat vmax = MaxWaveSpeed();
+  dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
+}
+
 //evaluate ODE rhs = f(q,t)
 void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, const dfloat T){
 

@@ -28,7 +28,7 @@ SOFTWARE.
 
 void acoustics_t::Report(dfloat time, int tstep){
 
-  static int frame=0;
+  const int frame = outputFrame;  // wave-field / VTU frame index for this report
 
   // Sample receivers at this output instant
   if (NReceiversLocal > 0 && recvSampleIdx < NRecvSamples) {
@@ -47,12 +47,9 @@ void acoustics_t::Report(dfloat time, int tstep){
   if(mesh.rank==0)
     printf("%5.2f (%d), %5.2f (time, timestep, norm)\n", time, tstep, norm2);
 
-  if (outputFormat != OutputFormat::VTU) {
-    // HDF5/XDMF: rank 0 writes; writer handles its own o_q.copyTo(q)
-    if (mesh.rank == 0 && h5Writer)
-      h5Writer->write(*this, frame);
-    frame++;
-  } else if (settings.compareSetting("OUTPUT TO FILE","TRUE")) {
+  // VTU visualization output (same path as the other solvers), controlled by
+  // OUTPUT TO FILE. Independent of the HDF5 wave-field output below.
+  if (settings.compareSetting("OUTPUT TO FILE","TRUE")) {
     // copy data back to host
     o_q.copyTo(q);
 
@@ -62,8 +59,19 @@ void acoustics_t::Report(dfloat time, int tstep){
     const std::string& dir = outDir.empty() ? std::string(".") : outDir;
     char fname[BUFSIZ];
     snprintf(fname, sizeof(fname), "%s/%s_%04d_%04d.vtu",
-             dir.c_str(), name.c_str(), mesh.rank, frame++);
+             dir.c_str(), name.c_str(), mesh.rank, frame);
 
     PlotFields(q, std::string(fname));
   }
+
+  // HDF5/XDMF wave-field snapshots, controlled by OUTPUT FORMAT (rank 0 writes;
+  // writer handles its own o_q.copyTo(q)). May run alongside the VTU output.
+  // Record the actual instant so the XDMF header is built from frames that
+  // truly exist on disk (see AcousticXdmfWriter::finalize).
+  if (outputFormat != OutputFormat::NONE && mesh.rank == 0 && h5Writer) {
+    h5Writer->write(*this, frame);
+    outputTimes.push_back(time);
+  }
+
+  outputFrame++;
 }
