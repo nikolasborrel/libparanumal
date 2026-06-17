@@ -47,10 +47,12 @@ void upwind(const dfloat nx,
   dfloat ndotUM = nx*uM + ny*vM + nz*wM;
   dfloat ndotUP = nx*uP + ny*vP + nz*wP;
 
-  *rflux  = p_half*   (ndotUP+ndotUM-(rP-rM));
-  *uflux  = p_half*nx*(rP+rM        -(ndotUP-ndotUM));
-  *vflux  = p_half*ny*(rP+rM        -(ndotUP-ndotUM));
-  *wflux  = p_half*nz*(rP+rM        -(ndotUP-ndotUM));
+  // dimensional upwind flux (wave speed c, impedance rho*c);
+  // reduces to the c=1 form when p_AcConstant=p_c=p_rho=1.
+  *rflux  = p_half*   ((ndotUP+ndotUM)*p_AcConstant - (rP-rM)*p_c);
+  *uflux  = p_half*nx*((rP+rM)/p_rho                - (ndotUP-ndotUM)*p_c);
+  *vflux  = p_half*ny*((rP+rM)/p_rho                - (ndotUP-ndotUM)*p_c);
+  *wflux  = p_half*nz*((rP+rM)/p_rho                - (ndotUP-ndotUM)*p_c);
 
 }
 
@@ -211,7 +213,13 @@ void surfaceTerms(const int e,
                                   @restrict const  dfloat *  y,
                                   @restrict const  dfloat *  z,
                                   @restrict const  dfloat *  q,
-                                  @restrict dfloat *  rhsq){
+                                  @restrict        dfloat *  rhsq,
+                                  @restrict const  dfloat *  acc,
+                                  @restrict        dfloat *  rhsacc,
+                                  @restrict const  dlong  *  mapAcc,
+                                  @restrict const  dfloat *  LR,
+                                  @restrict const  dlong  *  LRInfo,
+                                  const dlong NLRPoints){
 
   // for all elements
   for(dlong eo=0;eo<Nelements;eo+=p_NblockS;@outer(0)){

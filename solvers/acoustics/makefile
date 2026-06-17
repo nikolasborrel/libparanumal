@@ -80,9 +80,26 @@ endif
 #libraries
 ACOUSTICS_LIBP_LIBS=timeStepper mesh parAdogs ogs linAlg core
 
+# HDF5 / HighFive
+#  - HDF5 is a system dependency (apt: libhdf5-dev — headers under /usr/include/hdf5/serial)
+#  - HighFive is header-only and fetched on demand into third_party/ (see the
+#    $(HIGHFIVE_HDR) rule below) rather than vendored into the source tree.
+HDF5_INC     ?= /usr/include/hdf5/serial
+HDF5_LIBDIR  ?= /usr/lib/x86_64-linux-gnu/hdf5/serial
+
+HIGHFIVE_VERSION ?= v2.3.1
+HIGHFIVE_REPO    ?= https://github.com/BlueBrain/HighFive
+HIGHFIVE_DIR      = third_party/HighFive
+HIGHFIVE_INC      = $(HIGHFIVE_DIR)/include
+HIGHFIVE_HDR      = $(HIGHFIVE_INC)/highfive/H5Easy.hpp
+
+HDF5_FLAGS    = -I$(HDF5_INC) -I$(HIGHFIVE_INC)
+HDF5_LIBS     = -L$(HDF5_LIBDIR) -lhdf5
+
 #includes
 INCLUDES=${LIBP_INCLUDES} \
-				 -I.
+				 -I. \
+         $(HDF5_FLAGS)
 
 #defines
 DEFINES =${LIBP_DEFINES} \
@@ -93,7 +110,8 @@ ACOUSTICS_CXXFLAGS=${LIBP_CXXFLAGS} ${DEFINES} ${INCLUDES}
 
 #link libraries
 LIBS=-L${LIBP_LIBS_DIR} $(addprefix -l,$(ACOUSTICS_LIBP_LIBS)) \
-     ${LIBP_LIBS}
+     ${LIBP_LIBS} \
+     $(HDF5_LIBS)
 
 #link flags
 LFLAGS=${ACOUSTICS_CXXFLAGS} ${LIBS}
@@ -137,8 +155,20 @@ else
 	@ar -cr libacoustics.a $(OBJS)
 endif
 
+# Fetch the header-only HighFive library on demand (pinned tag, shallow clone),
+# so it is not vendored into the repo. Order-only prerequisite of compilation.
+$(HIGHFIVE_HDR):
+ifneq (,${verbose})
+	rm -rf $(HIGHFIVE_DIR)
+	git clone --quiet --depth 1 --branch $(HIGHFIVE_VERSION) $(HIGHFIVE_REPO) $(HIGHFIVE_DIR)
+else
+	@printf "%b" "$(OBJ_COLOR)Fetching HighFive $(HIGHFIVE_VERSION)$(NO_COLOR)\n";
+	@rm -rf $(HIGHFIVE_DIR)
+	@git clone --quiet --depth 1 --branch $(HIGHFIVE_VERSION) $(HIGHFIVE_REPO) $(HIGHFIVE_DIR)
+endif
+
 # rule for .cpp files
-%.o: %.cpp $(DEPS) | libp_libs
+%.o: %.cpp $(DEPS) | libp_libs $(HIGHFIVE_HDR)
 ifneq (,${verbose})
 	$(LIBP_CXX) -o $*.o -c $*.cpp $(ACOUSTICS_CXXFLAGS)
 else
@@ -157,6 +187,7 @@ clean-kernels: clean-libs
 	rm -rf ${LIBP_DIR}/.occa/
 
 realclean: clean
+	rm -rf $(HIGHFIVE_DIR)
 	${MAKE} -C ${LIBP_LIBS_DIR} realclean
 
 help:

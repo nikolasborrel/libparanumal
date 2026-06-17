@@ -25,6 +25,8 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <algorithm>
+#include <cmath>
 
 // LSERK4 coefficients (Carpenter & Kennedy, 1994 — 5-stage 4th-order)
 static const dfloat _lserk4_rka[5] = {
@@ -63,21 +65,24 @@ void acoustics_t::Run(){
                          mesh.o_z,
                          o_q);
 
-  dfloat cfl=1.0;
-  settings.getSetting("CFL NUMBER", cfl);
+  // Sample the initial condition onto the data-gen source grid (no-op if off).
+  SampleSourceGrid();
 
-  dfloat hmin = mesh.MinCharacteristicLength();
-  dfloat vmax = MaxWaveSpeed();
-  dfloat dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
+  // dt (member) was computed in Setup (ComputeTimeStep) so the output cadences
+  // could be clamped to it; reuse the identical value here.
   timeStepper.SetTimeStep(dt);
 
-  if (NLRPoints > 0) {
-    // Custom LSERK4 loop — steps both o_q and o_acc with the same coefficients.
-    // DOPRI5 is not supported with LR BCs (adaptive step control would need
-    // synchronised accumulator error estimation, which is not implemented).
+  // Data-gen sampling cadence (dataStride) and its diagnostics are set in
+  // SetupDataGen(), where dt is already known and NDataSamples is sized to it.
+
+  if (NLRPoints > 0 || (dataGenEnabled && NDataPoints > 0)) {
+    // Custom LSERK4 loop — steps both o_q and o_acc with the same coefficients,
+    // and (when enabled) samples the data-gen grid on its own cadence.
+    // DOPRI5 is not supported here: LR accumulators and exact-step data
+    // sampling both need fixed-step control with synchronised stages.
     if (!settings.compareSetting("TIME INTEGRATOR", "LSERK4")) {
       if (mesh.rank == 0)
-        printf("ERROR: LR BCs require TIME INTEGRATOR LSERK4\n");
+        printf("ERROR: LR BCs / DATA OUTPUT require TIME INTEGRATOR LSERK4\n");
       exit(1);
     }
 
@@ -95,11 +100,19 @@ void acoustics_t::Run(){
 
     dfloat outputInterval;
     settings.getSetting("OUTPUT INTERVAL", outputInterval);
+    // Cannot output more often than one snapshot per step: clamp to dt so the
+    // output-crossing logic below stays ahead of `time` and emits every frame
+    // (matches the clamped timeStepsOut / XDMF header). See SetupHDF5Output().
+    outputInterval = std::max(outputInterval, dt);
     dfloat outputTime = startTime + outputInterval;
     dfloat time = startTime;
     int tstep = 0;
 
     Report(time, 0);
+
+    // Record the initial field as data-gen frame 0 (separate cadence from Report)
+    if (dataGenEnabled && NDataPoints > 0)
+      SampleDataGrid(0, time);
 
     // Allocate save buffers for the output-at-exact-time trick
     deviceMemory<dfloat> o_saveq   = platform.malloc<dfloat>(N + mesh.totalHaloPairs*mesh.Np*Nfields);
@@ -142,10 +155,26 @@ void acoustics_t::Run(){
       stepLSERK4(stepdt);
       time += stepdt;
       tstep++;
+
+      // Data-gen sampling on its own step-stride cadence.
+      if (dataGenEnabled && NDataPoints > 0 &&
+          (tstep % dataStride == 0) && dataSampleIdx < NDataSamples)
+        SampleDataGrid((int)dataSampleIdx, time);
     }
   } else {
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
+
+  // Finalize wave-field output: write the XDMF header from the frames actually
+  // written (ac.outputTimes), so the time series never references missing data.
+  if (outputFormat != OutputFormat::NONE && mesh.rank == 0 && h5Writer)
+    h5Writer->finalize(*this);
+
+  // Write receiver impulse responses to HDF5 (no-op if no receivers configured)
+  WriteReceiverIRs();
+
+  // Write the ML data-generation grid to HDF5 (no-op unless DATA OUTPUT)
+  WriteDataGrid();
 
   // output norm of final solution
   {

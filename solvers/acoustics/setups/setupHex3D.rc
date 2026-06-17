@@ -49,8 +49,17 @@ DOPRI5
 [OUTPUT INTERVAL]
 1
 
+# VTU visualization output (common to all solvers). HDF5/XDMF wave-field output
+# (OUTPUT FORMAT) is a data-generation feature and lives in the data config; a
+# standalone run like this one writes only VTU.
 [OUTPUT TO FILE]
 TRUE
 
 [OUTPUT FILE NAME]
 acoustics
+
+[OUTPUT DIRECTORY]
+out/
+
+[SIMULATION ID]
+acoustics_hex

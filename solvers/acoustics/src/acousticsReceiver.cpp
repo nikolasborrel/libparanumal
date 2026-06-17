@@ -187,6 +187,7 @@ void acoustics_t::SetupReceivers() {
   const dfloat duration = finalTime - startTime;
   NRecvSamples = (dlong)(duration / outputInterval) + 2; // +2 for t=0 and rounding
 
+  // Sample rate in Hz (outputInterval is physical seconds).
   sampleRateOut = (int)round(1.0 / outputInterval);
 
   qRecv.malloc(NReceiversLocal * NRecvSamples, 0.0);

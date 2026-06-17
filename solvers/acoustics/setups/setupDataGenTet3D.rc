@@ -1,0 +1,85 @@
+[FORMAT]
+2.0
+
+# -----------------------------------------------------------------------------
+# Self-contained ML data-generation example on a BOX mesh (no external .msh).
+# Visualization (VTU) and data-generation are independent output paths: the
+# data-gen sampler is configured entirely in the referenced DATA CONFIG FILE
+# and runs on its own temporal cadence, leaving Report()/OUTPUT INTERVAL alone.
+# Data-gen requires the LSERK4 time integrator.
+# -----------------------------------------------------------------------------
+
+[DATA FILE]
+data/acousticsGaussianFmax3D.h
+
+[MESH FILE]
+BOX
+
+[MESH DIMENSION]
+3
+
+[ELEMENT TYPE] # number of edges
+6
+
+[BOX NX]
+4
+
+[BOX NY]
+4
+
+[BOX NZ]
+4
+
+[BOX BOUNDARY FLAG]
+1
+
+[POLYNOMIAL DEGREE]
+3
+
+[THREAD MODEL]
+CUDA
+
+[PLATFORM NUMBER]
+0
+
+[DEVICE NUMBER]
+0
+
+[TIME INTEGRATOR]
+LSERK4
+
+[START TIME]
+0
+
+[FINAL TIME]
+10
+
+[CFL NUMBER]
+1.0
+
+# Max frequency of interest [Hz] — a source/mesh property shared by the IC and
+# the data sampler (sets the data grid spacing and temporal cadence).
+[FMAX]
+1.0
+
+# Gaussian source center [m] (width derived from FMAX via sigma = 2c/(pi*FMAX)).
+[SOURCE POSITION]
+1.0 0.0 -1.0
+
+# --- Output settings (visualization snapshots; independent of data generation) ---
+# OUTPUT INTERVAL [s] sets the snapshot cadence written by Report() to VTU
+# (OUTPUT TO FILE) and the HDF5/XDMF writer (OUTPUT FORMAT). Data generation
+# (DATA CONFIG FILE below) has its own cadence and ignores these.
+[OUTPUT INTERVAL]
+1
+
+# VTU visualization output (independent of OUTPUT FORMAT / HDF5).
+[OUTPUT TO FILE]
+TRUE
+
+[OUTPUT DIRECTORY]
+out/
+
+# Modular data-generation config (swap this per train/val/test split).
+[DATA CONFIG FILE]
+setups/dataConfigTrain.rc
