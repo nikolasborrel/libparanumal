@@ -1,0 +1,62 @@
+/*
+
+The MIT License (MIT)
+
+Copyright (c) 2017-2022 Tim Warburton, Noel Chalmers, Jesse Chan, Ali Karakus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
+// Room acoustics with an FMAX-parameterized Gaussian source (3D).
+//
+// Unlike the fixed-width room/test ICs, the pulse width here is the kernel
+// define p_sigma0, computed in Setup() from the source/mesh frequency:
+//   sigma0 = SXYZ            if [SXYZ] > 0 is given, else
+//   sigma0 = 2c/(pi*FMAX)    (DTU convention, acousticsSetup.c)
+// so [FMAX] is the single source of truth driving both the source width and the
+// data-generation sample grid. Matches DTU gaussianSource(): exp(-d^2/sigma^2).
+//
+// BC types as in acousticsRoom3D.h (1 perfect-refl, 2 freq-indep, 3 LR, 4 ER).
+
+#define p_ROOM_ACOUSTICS 1
+
+#define acousticsDirichletConditions3D(bc, t, x, y, z, nx, ny, nz, rM, uM, vM, wM, rB, uB, vB, wB) \
+{                                                                                                     \
+  if(bc > 0) {                                                                                       \
+    *(rB) = rM;                                                                                      \
+    *(uB) = -uM;                                                                                     \
+    *(vB) = -vM;                                                                                     \
+    *(wB) = -wM;                                                                                     \
+  }                                                                                                  \
+}
+
+// Initial condition: Gaussian pressure pulse centered at (p_srcX,p_srcY,p_srcZ)
+// with width p_sigma0 — both injected as kernel defines from the settings
+// (SOURCE POSITION, and SXYZ/FMAX) by Setup().
+#define acousticsInitialConditions3D(t, x, y, z, r, u, v, w)              \
+{                                                                        \
+  const dfloat _dx = x - (p_srcX);                                       \
+  const dfloat _dy = y - (p_srcY);                                       \
+  const dfloat _dz = z - (p_srcZ);                                       \
+  *(r) = exp(-(_dx*_dx + _dy*_dy + _dz*_dz) / (p_sigma0*p_sigma0));       \
+  *(u) = 0.0;                                                            \
+  *(v) = 0.0;                                                            \
+  *(w) = 0.0;                                                            \
+}

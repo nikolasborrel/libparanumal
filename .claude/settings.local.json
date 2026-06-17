@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp /tmp/acmed.rc ./setup.rc)",
+      "Bash(timeout 300 mpirun --oversubscribe -np 1 ../solvers/acoustics/acousticsMain ./setup.rc)"
+    ]
+  }
+}

@@ -49,6 +49,7 @@ DOPRI5
 [OUTPUT INTERVAL]
 1
 
+# VTU visualization output (independent of OUTPUT FORMAT / HDF5).
 [OUTPUT TO FILE]
 TRUE
 

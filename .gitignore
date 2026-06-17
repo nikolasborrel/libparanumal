@@ -6,6 +6,8 @@
 !*/*/Makefile
 !LICENSE
 
+out/
+solvers/acoustics/third_party/
 *.o
 *.a
 .DS_STORE
