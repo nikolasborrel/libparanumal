@@ -63,6 +63,9 @@ inputRC = testDir + "/setup.rc"
 TOL = 1.0e-5
 alignWidth = 40
 
+#integrators that adapt the time step; the printed dt is not constant for these
+adaptiveIntegrators = ["DOPRI5", "SARK4", "SARK5"]
+
 numeric_const_pattern = r"[-+]? (?: (?: \d* \. \d+ ) | (?: \d+ \.? ) )(?: [Ee] [+-]? \d+ ) ?"
 
 if len(sys.argv)>1:
@@ -98,7 +101,9 @@ def writeSetup(filename, settings):
   file.write(str_settings)
   file.close()
 
-def test(name, cmd, settings, referenceNorm, ranks=1):
+def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None):
+
+  #referenceDt is None for integrators with a variable sized dt
 
   #create input file
   writeSetup("setup",settings)
@@ -128,9 +133,21 @@ def test(name, cmd, settings, referenceNorm, ranks=1):
     failed=0;
     if "Solution norm = " in output:
       norm = float(output.split()[3])
-      if abs(norm - referenceNorm) < TOL:
-        print(bcolors.PASS + "PASS" + bcolors.ENDC)
-      else:
+
+      #the printed dt is only constant, and thus a meaningful reference, for
+      #fixed step integrators
+      integrator = next((s.value for s in settings if s.name=="TIME INTEGRATOR"), None)
+      if integrator in adaptiveIntegrators:
+        referenceDt = None
+
+      #collect the time step
+      dt=None
+      if referenceDt is not None:
+        for line in run.stdout.decode().splitlines():
+          if "Time step dt = " in line:
+            dt = float(line.split()[4])
+
+      if abs(norm - referenceNorm) >= TOL:
         #failed residual check
         print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
         print(bcolors.WARNING + "Expected Result: " + str(referenceNorm) + bcolors.ENDC)
@@ -138,6 +155,16 @@ def test(name, cmd, settings, referenceNorm, ranks=1):
         #save the setup for reproducibility
         writeSetup(name,settings)
         failed = 1
+      elif referenceDt is not None and abs(dt - referenceDt) >= TOL:
+        #failed time step check
+        print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+        print(bcolors.WARNING + "Expected dt: " + str(referenceDt) + bcolors.ENDC)
+        print(bcolors.WARNING + "Observed dt: " + str(dt) + bcolors.ENDC)
+        #save the setup for reproducibility
+        writeSetup(name,settings)
+        failed = 1
+      else:
+        print(bcolors.PASS + "PASS" + bcolors.ENDC)
     else:
       #this failure is worse, so dump the whole output for debug
       print(bcolors.FAIL + "FAIL" + bcolors.ENDC)

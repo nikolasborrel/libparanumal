@@ -49,6 +49,9 @@ void acoustics_t::Run(){
   dfloat dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
   timeStepper.SetTimeStep(dt);
 
+  if(mesh.rank==0)
+    printf("Time step dt = %17.15lg\n", dt);
+
   timeStepper.Run(*this, o_q, startTime, finalTime);
 
   // output norm of final solution
