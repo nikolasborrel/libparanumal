@@ -174,8 +174,6 @@ void acoustics_t::SetupReceivers() {
 
   findReceiverElements(*this);
 
-  if (NReceiversLocal == 0) return;
-
   dfloat startTime, finalTime;
   settings.getSetting("START TIME", startTime);
   settings.getSetting("FINAL TIME", finalTime);
@@ -189,15 +187,17 @@ void acoustics_t::SetupReceivers() {
 
   sampleRateOut = (int)round(1.0 / outputInterval);
 
-  qRecv.malloc(NReceiversLocal * NRecvSamples, 0.0);
-  o_qRecv = platform.malloc<dfloat>(qRecv);
+  if (NReceiversLocal > 0) {
+    qRecv.malloc(NReceiversLocal * NRecvSamples, 0.0);
+    o_qRecv = platform.malloc<dfloat>(qRecv);
 
-  o_recvElements    = platform.malloc<dlong>(recvElements);
-  o_recvElementsIdx = platform.malloc<dlong>(recvElementsIdx);
+    o_recvElements    = platform.malloc<dlong>(recvElements);
+    o_recvElementsIdx = platform.malloc<dlong>(recvElementsIdx);
 
-  buildInterpolationOperators(*this);
+    buildInterpolationOperators(*this);
+  }
 
-  // Build the receiver interpolation kernel (needs NRecvSamples to be known)
+  // buildKernel is collective, so every rank builds even with no local receivers
   properties_t recvInfo = mesh.props;
   const int blockSize = 256;
   recvInfo["defines/p_blockSize"]    = blockSize;
