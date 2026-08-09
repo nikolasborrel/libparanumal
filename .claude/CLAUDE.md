@@ -25,3 +25,10 @@ extension version it re-creates the listed branches from the current HEAD and
 collapses the whole stack onto one commit. Use `gh stack link` instead.
 
 PR branches follow the naming convention: `feat/acoustics-<slug>`
+
+## Commit messages and PR descriptions
+
+Describe only the delta relative to the parent branch. Never describe a change as
+a fix to code introduced earlier in the same branch — that code does not exist
+from the parent's point of view. Fold the correction into the feature
+description instead.
