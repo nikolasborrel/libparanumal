@@ -33,14 +33,24 @@ data3D = acousticsDir + "/data/acousticsGaussian3D.h"
 data2DRoom = acousticsDir + "/data/acousticsRoom2D.h"
 data3DRoom = acousticsDir + "/data/acousticsRoom3D.h"
 
+recvFile = testDir + "/receivers.dat"
+
+def writeReceivers(filename, points):
+  file = open(filename, "w")
+  file.write(str(len(points)) + "\n")
+  for p in points:
+    file.write("%.16g %.16g %.16g\n" % p)
+  file.close()
+
 def acousticsSettings(rcformat="2.0", data_file=data2D,
                      mesh="BOX", dim=2, element=4, nx=10, ny=10, nz=10, boundary_flag=-1,
                      box_dim=10,
                      degree=4, thread_model=device, platform_number=0, device_number=0,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
-                      impedance=415.0, surface_flux="UPWIND"):
-  return [setting_t("FORMAT", rcformat),
+                      impedance=415.0, surface_flux="UPWIND",
+                      receiver_file=None):
+  settings = [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
           setting_t("DENSITY", density),
           setting_t("SPEED OF SOUND", sound_speed),
@@ -65,6 +75,11 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
           setting_t("START TIME", start_time),
           setting_t("FINAL TIME", final_time),
           setting_t("OUTPUT TO FILE", output_to_file)]
+
+  if receiver_file is not None:
+    settings.append(setting_t("RECEIVER FILE", receiver_file))
+
+  return settings
 
 def main():
   failCount=0;
@@ -208,7 +223,41 @@ def main():
                                                impedance=5.0),
                     referenceNorm=0.387475178751856)
 
+  #the box centre is a mesh node, so the t=0 sample is exp(0)=1 exactly, and
+  #final_time=0 leaves that sample as the whole record
+  writeReceivers(recvFile, [(0.0, 0.0, 0.0)])
+  failCount += test(name="testAcousticsReceiverNode",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=1,
+                                               time_integrator="LSERK4",final_time=0.0,
+                                               receiver_file=recvFile),
+                    referenceNorm=0.614876573596189,
+                    referenceRecvNorm=1.0)
+
+  #off-node receivers exercise the interpolation weights; sampling must not
+  #perturb the solution, so the norm matches testAcousticsRoomRigidTet
+  writeReceivers(recvFile, [(0.3, 0.15, -0.22), (-0.55, 0.42, 0.61)])
+  failCount += test(name="testAcousticsReceiverTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=1,
+                                               final_time=2.0,receiver_file=recvFile),
+                    referenceNorm=0.614784622759662,
+                    referenceRecvNorm=1.45569073560319)
+
+  #ranks owning no receiver still take part in the collective kernel build and
+  #the norm reduction
+  failCount += test(name="testAcousticsReceiverTet_MPI", ranks=4,
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=1,
+                                               final_time=2.0,receiver_file=recvFile),
+                    referenceNorm=0.614966266247452,
+                    referenceRecvNorm=1.45552027978335)
+
   #clean up
+  os.remove(recvFile)
   for file_name in os.listdir(testDir):
     if file_name.endswith('.vtu'):
       os.remove(testDir + "/" + file_name)
