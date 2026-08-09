@@ -53,7 +53,8 @@ public:
 
   int Nfields;
 
-  dfloat rho, c; // medium density [kg/m^3] and speed of sound [m/s]
+  dfloat rho, c;        // medium density [kg/m^3] and speed of sound [m/s]
+  dfloat ZFreqIndep;    // acoustic impedance for frequency-independent BC [Pa·s/m]
 
   timeStepper_t timeStepper;
 

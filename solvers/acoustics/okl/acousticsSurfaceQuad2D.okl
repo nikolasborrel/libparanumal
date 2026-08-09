@@ -38,13 +38,76 @@ void upwind(const dfloat nx,
             dfloat *uflux,
             dfloat *vflux){
 
-  //subtract F(qM)
+  //subtract F(qM) — dimensional upwind flux (reduces to c=1 form when rho=c=1)
   dfloat ndotUM = nx*uM + ny*vM;
   dfloat ndotUP = nx*uP + ny*vP;
-  *rflux = p_half*   (ndotUM+ndotUP-(rP-rM));
-  *uflux = p_half*nx*(rP+rM - (ndotUP-ndotUM));
-  *vflux = p_half*ny*(rP+rM - (ndotUP-ndotUM));
+  *rflux = p_half*   ((ndotUM+ndotUP)*p_AcConstant - (rP-rM)*p_c);
+  *uflux = p_half*nx*((rP+rM)/p_rho                - (ndotUP-ndotUM)*p_c);
+  *vflux = p_half*ny*((rP+rM)/p_rho                - (ndotUP-ndotUM)*p_c);
 
+}
+
+// Upwind flux with wall-normal velocity term for impedance BCs (full-flux form)
+void upwindBC(const dfloat nx,
+              const dfloat ny,
+              const dfloat rM,
+              const dfloat uM,
+              const dfloat vM,
+              const dfloat rP,
+              const dfloat uP,
+              const dfloat vP,
+              dfloat *rflux,
+              dfloat *uflux,
+              dfloat *vflux,
+              const dfloat vn){
+
+  dfloat ndotUM = nx*uM + ny*vM;
+  dfloat ndotUP = nx*uP + ny*vP;
+  const dfloat vn2 = 2.0*vn;
+  *rflux  = p_half*   ((ndotUP+vn2+ndotUM)*p_AcConstant - (rP-rM)*p_c);
+  *uflux  = p_half*nx*((rP+rM)/p_rho      - (ndotUP+vn2-ndotUM)*p_c);
+  *vflux  = p_half*ny*((rP+rM)/p_rho      - (ndotUP+vn2-ndotUM)*p_c);
+}
+
+// Central flux (full-flux form)
+void central(const dfloat nx,
+             const dfloat ny,
+             const dfloat rM,
+             const dfloat uM,
+             const dfloat vM,
+             const dfloat rP,
+             const dfloat uP,
+             const dfloat vP,
+             dfloat *rflux,
+             dfloat *uflux,
+             dfloat *vflux){
+
+  dfloat ndotUM = nx*uM + ny*vM;
+  dfloat ndotUP = nx*uP + ny*vP;
+  *rflux  = p_half*(ndotUP + ndotUM)*p_AcConstant;
+  *uflux  = p_half*nx*(rP+rM)/p_rho;
+  *vflux  = p_half*ny*(rP+rM)/p_rho;
+}
+
+// Central flux with wall-normal velocity term (full-flux form)
+void centralBC(const dfloat nx,
+               const dfloat ny,
+               const dfloat rM,
+               const dfloat uM,
+               const dfloat vM,
+               const dfloat rP,
+               const dfloat uP,
+               const dfloat vP,
+               const dfloat vn,
+               dfloat *rflux,
+               dfloat *uflux,
+               dfloat *vflux){
+
+  dfloat ndotUM = nx*uM + ny*vM;
+  dfloat ndotUP = nx*uP + ny*vP;
+  *rflux  = (p_half*(ndotUP + ndotUM) + vn)*p_AcConstant;
+  *uflux  = p_half*nx*(rP+rM)/p_rho;
+  *vflux  = p_half*ny*(rP+rM)/p_rho;
 }
 
 void surfaceTerms(const int e,
@@ -96,7 +159,19 @@ void surfaceTerms(const int e,
   const dfloat sc = invWJ*sJ;
 
   dfloat rflux, uflux, vflux;
+#if defined(p_ROOM_ACOUSTICS)
+  dfloat vn = 0.0;
+  if(bc == 2) vn = rM / p_Z_IND;
+#if defined(p_CENTRAL_FLUX)
+  centralBC(nx, ny, rM, uM, vM, rP, uP, vP, vn, &rflux, &uflux, &vflux);
+#else
+  upwindBC(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux, vn);
+#endif
+#elif defined(p_CENTRAL_FLUX)
+  central(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux);
+#else
   upwind(nx, ny, rM, uM, vM, rP, uP, vP, &rflux, &uflux, &vflux);
+#endif
 
   s_rflux[es][j][i] += sc*(-rflux);
   s_uflux[es][j][i] += sc*(-uflux);
