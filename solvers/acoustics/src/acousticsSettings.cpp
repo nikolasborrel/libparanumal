@@ -42,6 +42,15 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "1.0",
              "Speed of sound in the medium [m/s]");
 
+  newSetting("FREQINDEP IMPEDANCE",
+             "415.0",
+             "Acoustic impedance for frequency-independent BC [Pa·s/m] (default: air at 20°C, rho*c)");
+
+  newSetting("SURFACE FLUX",
+             "UPWIND",
+             "Numerical flux used in the surface integral",
+             {"UPWIND", "CENTRAL"});
+
   newSetting("TIME INTEGRATOR",
              "DOPRI5",
              "Time integration method",
@@ -79,6 +88,7 @@ void acousticsSettings_t::report() {
     reportSetting("DATA FILE");
     reportSetting("DENSITY");
     reportSetting("SPEED OF SOUND");
+    reportSetting("SURFACE FLUX");
     reportSetting("TIME INTEGRATOR");
     reportSetting("START TIME");
     reportSetting("FINAL TIME");
