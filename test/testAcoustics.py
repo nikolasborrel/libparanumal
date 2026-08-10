@@ -542,6 +542,23 @@ def main():
                     referenceNorm=0.614876573596189,
                     referenceRecvNorm=1.0)
 
+  #the same node sample on every element type: both room ICs are exp(0)=1 at the
+  #origin, so the single t=0 sample is exactly 1 whatever the element geometry
+  nodeNorm = {"Tri":  0.723119916571585,
+              "Quad": 0.723212955064728,
+              "Hex":  0.615034241922833}
+  for name, elem, data, dim in [("Tri", 3, data2DRoom, 2),
+                                ("Quad", 4, data2DRoom, 2),
+                                ("Hex", 12, data3DRoom, 3)]:
+    failCount += test(name="testAcousticsReceiverNode" + name,
+                      cmd=acousticsBin,
+                      settings=acousticsSettings(element=elem,data_file=data,dim=dim,
+                                                 degree=2,box_dim=2,boundary_flag=1,
+                                                 time_integrator="LSERK4",final_time=0.0,
+                                                 receiver_file=recvFile),
+                      referenceNorm=nodeNorm[name],
+                      referenceRecvNorm=1.0)
+
   #off-node receivers exercise the interpolation weights; sampling must not
   #perturb the solution, so the norm matches testAcousticsRoomRigidTet
   writeReceivers(recvFile, [(0.3, 0.15, -0.22), (-0.55, 0.42, 0.61)])
