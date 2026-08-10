@@ -94,6 +94,7 @@ public:
   dlong LRNRealPoles = 0;
   dlong LRNImagPoles = 0;
   dlong NLRPoints = 0;           // total LR boundary face nodes on this rank
+  dfloat LRMaxPole = 0.0;        // fastest pole rate [1/s] in the vectorfit
 
   memory<dfloat>       LR;       // vectorfit coefficients
   memory<dlong>        LRInfo;   // [Npoles, NRealPoles, NImagPoles]

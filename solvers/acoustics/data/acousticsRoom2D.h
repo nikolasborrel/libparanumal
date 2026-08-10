@@ -29,6 +29,7 @@ SOFTWARE.
 // BC types:
 //   1 — Perfect reflection (specular)
 //   2 — Frequency-independent impedance (Z = p_Z_IND)
+//   3 — Locally reacting, frequency-dependent impedance (LR VECTORFIT FILE)
 //
 // Activates the impedance flux path in surface kernels via p_ROOM_ACOUSTICS.
 

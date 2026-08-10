@@ -35,12 +35,10 @@ data3DRoom = acousticsDir + "/data/acousticsRoom3D.h"
 
 recvFile = testDir + "/receivers.dat"
 
-def writeReceivers(filename, points):
-  file = open(filename, "w")
-  file.write(str(len(points)) + "\n")
-  for p in points:
-    file.write("%.16g %.16g %.16g\n" % p)
-  file.close()
+#surface admittance of a 5cm porous layer, fitted with 14 poles over 50-2000Hz,
+#see solvers/acoustics/vectorfit/README.md
+lrMaterialFile = acousticsDir + "/data/LRDATA14.dat"
+lrFile         = testDir + "/lrVectorfit.dat"
 
 def acousticsSettings(rcformat="2.0", data_file=data2D,
                      mesh="BOX", dim=2, element=4, nx=10, ny=10, nz=10, boundary_flag=-1,
@@ -49,7 +47,7 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
                       impedance=415.0, surface_flux="UPWIND",
-                      receiver_file=None):
+                      receiver_file=None, lr_file=None):
   settings = [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
           setting_t("DENSITY", density),
@@ -78,6 +76,9 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
 
   if receiver_file is not None:
     settings.append(setting_t("RECEIVER FILE", receiver_file))
+
+  if lr_file is not None:
+    settings.append(setting_t("LR VECTORFIT FILE", lr_file))
 
   return settings
 
@@ -223,6 +224,127 @@ def main():
                                                impedance=5.0),
                     referenceNorm=0.387475178751856)
 
+  #boundary flag 3 is the locally-reacting BC. A constant surface admittance Y
+  #must reproduce the frequency-independent BC with Z = 1/Y
+  writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
+  failCount += test(name="testAcousticsRoomLRConstantTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.387485800176955)
+
+  failCount += test(name="testAcousticsRoomLRConstantQuad",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=4,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.387479993745552)
+
+  failCount += test(name="testAcousticsRoomLRConstantTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=3,
+                                               final_time=2.0,time_integrator="LSERK4",
+                                               lr_file=lrFile),
+                    referenceNorm=0.298868490129398)
+
+  failCount += test(name="testAcousticsRoomLRConstantHex",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=12,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=3,
+                                               final_time=2.0,time_integrator="LSERK4",
+                                               lr_file=lrFile),
+                    referenceNorm=0.298590700093030)
+
+  failCount += test(name="testAcousticsRoomLRCentralTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="LSERK4",lr_file=lrFile,
+                                               surface_flux="CENTRAL"),
+                    referenceNorm=0.387483415651966)
+
+  #Y=0 is a rigid wall
+  writeLRData(lrFile, *constantAdmittanceLRData(0.0))
+  failCount += test(name="testAcousticsRoomLRRigidTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.723214962153181)
+
+  #a fitted material: the poles sit at 300-21000 rad/s, so the medium has to be
+  #air for the pulse spectrum to reach the frequency range that was fitted
+  lrHeader, lrCoeffs = readLRData(lrMaterialFile)
+  writeLRData(lrFile, lrHeader, lrCoeffs)
+  failCount += test(name="testAcousticsRoomLRMaterialTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.484349091289788)
+
+  failCount += test(name="testAcousticsRoomLRMaterialQuad",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=4,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.484348255295611)
+
+  failCount += test(name="testAcousticsRoomLRMaterialTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.350474716365334)
+
+  failCount += test(name="testAcousticsRoomLRMaterialHex",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=12,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.352709954891316)
+
+  #halving the time scale and moving the poles up by the same factor is an exact
+  #invariance of the LR BC, so this reproduces the material norm above
+  writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 2.0))
+  failCount += test(name="testAcousticsRoomLRScaledTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.01,
+                                               density=0.6,sound_speed=686.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.350474716365334)
+
+  #the same halved time scale with the poles left in place: a constant
+  #admittance would still give the material norm, a frequency-dependent one not
+  writeLRData(lrFile, lrHeader, lrCoeffs)
+  failCount += test(name="testAcousticsRoomLRUnscaledTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.01,
+                                               density=0.6,sound_speed=686.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.264633120701544)
+
+  failCount += test(name="testAcousticsRoomLRMaterialTet_MPI", ranks=4,
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=4,ny=4,nz=4,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=0.350247744152265)
+
   #the box centre is a mesh node, so the t=0 sample is exp(0)=1 exactly, and
   #final_time=0 leaves that sample as the whole record
   writeReceivers(recvFile, [(0.0, 0.0, 0.0)])
@@ -258,6 +380,7 @@ def main():
 
   #clean up
   os.remove(recvFile)
+  os.remove(lrFile)
   for file_name in os.listdir(testDir):
     if file_name.endswith('.vtu'):
       os.remove(testDir + "/" + file_name)

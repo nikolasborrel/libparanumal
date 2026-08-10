@@ -74,7 +74,7 @@ void acoustics_t::Run(){
   if(mesh.rank==0)
     printf("Time step dt = %17.15lg\n", dt);
 
-  if (NLRPoints > 0) {
+  if (LRNpoles > 0) {
     // Custom LSERK4 loop — steps both o_q and o_acc with the same coefficients.
     // DOPRI5 is not supported with LR BCs (adaptive step control would need
     // synchronised accumulator error estimation, which is not implemented).
@@ -83,6 +83,14 @@ void acoustics_t::Run(){
         printf("ERROR: LR BCs require TIME INTEGRATOR LSERK4\n");
       exit(1);
     }
+
+    // the accumulators are advanced explicitly, so the fastest pole has to fit
+    // inside the LSERK4 stability region or the solution diverges
+    const dfloat lserk4Stability = 2.78;
+    if (mesh.rank == 0 && LRMaxPole*dt > lserk4Stability)
+      printf("WARNING: LR pole rate %.4lg 1/s is unstable at dt %.4lg, "
+             "refine the mesh or use CFL NUMBER <= %.4lg\n",
+             LRMaxPole, dt, cfl*lserk4Stability/(LRMaxPole*dt));
 
     const dlong N    = mesh.Nelements * mesh.Np * Nfields;
     const dlong Nacc = NLRPoints * LRNpoles;

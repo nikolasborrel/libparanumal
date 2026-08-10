@@ -109,6 +109,40 @@ void centralBC(const dfloat nx,
   *vflux  = p_half*ny*(rP-rM)/p_rho;
 }
 
+#if defined(p_ROOM_ACOUSTICS)
+// Locally-reacting BC: advance the pole accumulators and return the wall-normal
+// velocity vn = Y(s)p of the vectorfit surface admittance Y
+dfloat lrNormalVelocity(const dfloat rM,
+                        const dlong idAcc,
+                        const dfloat *LR,
+                        const dlong  *LRInfo,
+                        const dfloat *acc,
+                        dfloat *rhsacc){
+
+  const dlong Npoles = LRInfo[0];
+  const dlong NReal  = LRInfo[1];
+  const dlong base   = Npoles*idAcc;
+
+  dfloat vn = LR[p_LRYinf]*rM;
+
+  for(int pi=0;pi<NReal;++pi){
+    rhsacc[base+pi] = -LR[p_LRLambda+pi]*acc[base+pi] + rM;
+    vn += LR[p_LRA+pi]*acc[base+pi];
+  }
+
+  for(int pi=NReal;pi<Npoles;pi+=2){
+    const int pIdx = (pi-NReal)/2;
+    rhsacc[base+pi]   = -LR[p_LRAlpha+pIdx]*acc[base+pi]
+                        -LR[p_LRBeta +pIdx]*acc[base+pi+1] + rM;
+    rhsacc[base+pi+1] = -LR[p_LRAlpha+pIdx]*acc[base+pi+1]
+                        +LR[p_LRBeta +pIdx]*acc[base+pi];
+    vn += 2.0*(LR[p_LRB+pIdx]*acc[base+pi] + LR[p_LRC+pIdx]*acc[base+pi+1]);
+  }
+
+  return vn;
+}
+#endif
+
 // batch process elements
 @kernel void acousticsSurfaceTri2D(const dlong Nelements,
                                   @restrict const  dlong  *  elementIds,
@@ -199,24 +233,8 @@ void centralBC(const dfloat nx,
             }
 
             if(bc == 3){
-              const dlong idAcc = mapAcc[element*p_Nfp*p_Nfaces + n];
-              vn = LR[p_LRYinf] * rM;
-              // real poles
-              for(int pi = 0; pi < LRInfo[1]; ++pi){
-                rhsacc[LRInfo[0]*idAcc + pi] =
-                    -LR[p_LRLambda + pi] * acc[LRInfo[0]*idAcc + pi] + rM;
-                vn += LR[p_LRA + pi] * acc[LRInfo[0]*idAcc + pi];
-              }
-              // complex-conjugate pole pairs
-              for(int pi = LRInfo[1]; pi < LRInfo[0]; pi += 2){
-                const int pIdx = (pi - LRInfo[1]) / 2;
-                rhsacc[LRInfo[0]*idAcc + pi]   = -LR[p_LRAlpha+pIdx]*acc[LRInfo[0]*idAcc+pi]
-                                                  -LR[p_LRBeta +pIdx]*acc[LRInfo[0]*idAcc+pi+1] + rM;
-                rhsacc[LRInfo[0]*idAcc + pi+1] = -LR[p_LRAlpha+pIdx]*acc[LRInfo[0]*idAcc+pi+1]
-                                                  +LR[p_LRBeta +pIdx]*acc[LRInfo[0]*idAcc+pi];
-                vn += 2.0*(LR[p_LRB+pIdx]*acc[LRInfo[0]*idAcc+pi]
-                          +LR[p_LRC+pIdx]*acc[LRInfo[0]*idAcc+pi+1]);
-              }
+              vn = lrNormalVelocity(rM, mapAcc[element*p_Nfp*p_Nfaces + n],
+                                    LR, LRInfo, acc, rhsacc);
             }
 
 #if defined(p_CENTRAL_FLUX)
