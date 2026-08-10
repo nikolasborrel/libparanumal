@@ -28,11 +28,13 @@
 
 from test import *
 import shutil
+import math
 
 data2D = acousticsDir + "/data/acousticsGaussian2D.h"
 data3D = acousticsDir + "/data/acousticsGaussian3D.h"
 data2DRoom = acousticsDir + "/data/acousticsRoom2D.h"
 data3DRoom = acousticsDir + "/data/acousticsRoom3D.h"
+data3DFmax = acousticsDir + "/data/acousticsGaussianFmax3D.h"
 
 recvFile = testDir + "/receivers.dat"
 
@@ -48,6 +50,7 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
                       impedance=415.0, surface_flux="UPWIND",
+                      fmax=None, sxyz=None, source_xyz=None,
                       receiver_file=None, lr_file=None,
                       output_dir=None, simulation_id=None, output_format=None):
   settings = [setting_t("FORMAT", rcformat),
@@ -75,6 +78,16 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
           setting_t("START TIME", start_time),
           setting_t("FINAL TIME", final_time),
           setting_t("OUTPUT TO FILE", output_to_file)]
+
+  if fmax is not None:
+    settings.append(setting_t("FMAX", fmax))
+
+  if sxyz is not None:
+    settings.append(setting_t("SXYZ", sxyz))
+
+  if source_xyz is not None:
+    for axis, v in zip("XYZ", source_xyz):
+      settings.append(setting_t("SOURCE " + axis, v))
 
   if receiver_file is not None:
     settings.append(setting_t("RECEIVER FILE", receiver_file))
@@ -558,6 +571,21 @@ def main():
                     referenceNorm=0.614966266247452,
                     referenceRecvNorm=1.45552027978335,
                     h5Checks=recvIRs("recvIRmpi"))
+
+  #the source width follows from FMAX as sigma = 2c/(pi*FMAX); with c=1, FMAX=1
+  #that is 2/pi, so an explicit SXYZ of the same value must give the same field
+  fmaxSettings = dict(element=6,data_file=data3DFmax,dim=3,degree=2,box_dim=2,
+                      boundary_flag=1,final_time=1.0,source_xyz=(0.5,0.0,-0.5))
+  sourceNorm = 0.670467449677384
+  failCount += test(name="testAcousticsSourceFmax",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(fmax=1.0,**fmaxSettings),
+                    referenceNorm=sourceNorm)
+
+  failCount += test(name="testAcousticsSourceSxyz",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(sxyz=2.0/math.pi,**fmaxSettings),
+                    referenceNorm=sourceNorm)
 
   #clean up
   os.remove(recvFile)

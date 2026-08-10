@@ -60,6 +60,9 @@ public:
   int Nfields;
 
   dfloat rho, c;        // medium density [kg/m^3] and speed of sound [m/s]
+  dfloat fmax;          // max frequency of interest [Hz]
+  dfloat sigma0;        // Gaussian source width [m]
+  dfloat srcX, srcY, srcZ;  // Gaussian source center [m]
   dfloat ZFreqIndep;    // acoustic impedance for frequency-independent BC [Pa·s/m]
 
   timeStepper_t timeStepper;

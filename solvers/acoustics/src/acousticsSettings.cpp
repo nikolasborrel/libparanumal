@@ -42,6 +42,27 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "1.0",
              "Speed of sound in the medium [m/s]");
 
+  newSetting("FMAX",
+             "1000.0",
+             "Maximum frequency of interest [Hz]; the mesh is expected to resolve it");
+
+  newSetting("SXYZ",
+             "0",
+             "Gaussian source width sigma [m]. If <= 0, derived from FMAX as "
+             "sigma = 2c/(pi*FMAX). Exposed to initial-condition headers as p_sigma0");
+
+  newSetting("SOURCE X",
+             "0.0",
+             "Gaussian source center x [m], exposed as p_srcX");
+
+  newSetting("SOURCE Y",
+             "0.0",
+             "Gaussian source center y [m], exposed as p_srcY");
+
+  newSetting("SOURCE Z",
+             "0.0",
+             "Gaussian source center z [m], exposed as p_srcZ");
+
   newSetting("FREQINDEP IMPEDANCE",
              "415.0",
              "Acoustic impedance for frequency-independent BC [Pa·s/m] (default: air at 20°C, rho*c)");
@@ -116,6 +137,7 @@ void acousticsSettings_t::report() {
     reportSetting("DATA FILE");
     reportSetting("DENSITY");
     reportSetting("SPEED OF SOUND");
+    reportSetting("FMAX");
     reportSetting("SURFACE FLUX");
     reportSetting("TIME INTEGRATOR");
     reportSetting("START TIME");

@@ -28,8 +28,10 @@ SOFTWARE.
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+
 
 void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
                         acousticsSettings_t& _settings){
@@ -43,7 +45,16 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   settings.getSetting("DENSITY", rho);
   settings.getSetting("SPEED OF SOUND", c);
+  settings.getSetting("FMAX", fmax);
   settings.getSetting("FREQINDEP IMPEDANCE", ZFreqIndep);
+
+  dfloat sxyz = 0.0;
+  settings.getSetting("SXYZ", sxyz);
+  sigma0 = (sxyz > 0.0) ? sxyz : 2.0*c/(M_PI*fmax);
+
+  settings.getSetting("SOURCE X", srcX);
+  settings.getSetting("SOURCE Y", srcY);
+  settings.getSetting("SOURCE Z", srcZ);
 
   dlong Nlocal = mesh.Nelements*mesh.Np*Nfields;
   dlong Nhalo  = mesh.totalHaloPairs*mesh.Np*Nfields;
@@ -106,6 +117,10 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
   kernelInfo["defines/" "p_c"]= c;
   kernelInfo["defines/" "p_AcConstant"]= rho*c*c;
   kernelInfo["defines/" "p_Z_IND"]= ZFreqIndep;
+  kernelInfo["defines/" "p_sigma0"]= sigma0;
+  kernelInfo["defines/" "p_srcX"]= srcX;
+  kernelInfo["defines/" "p_srcY"]= srcY;
+  kernelInfo["defines/" "p_srcZ"]= srcZ;
 
   if (settings.compareSetting("SURFACE FLUX", "CENTRAL"))
     kernelInfo["defines/" "p_CENTRAL_FLUX"]= 1;
