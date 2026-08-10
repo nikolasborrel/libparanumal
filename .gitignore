@@ -6,6 +6,12 @@
 !*/*/Makefile
 !LICENSE
 
+out/
+solvers/acoustics/third_party/
+.claude/settings.local.json
+.hdf5cfg-*
+*.h5
+*.xdmf
 *.o
 *.a
 .DS_STORE

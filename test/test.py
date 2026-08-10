@@ -101,6 +101,49 @@ def writeSetup(filename, settings):
   file.write(str_settings)
   file.close()
 
+#HDF5 output is an opt-in build (make HDF5=1), so .h5 checks skip when the
+#reader or the build is unavailable
+try:
+  import h5py
+  haveH5py = True
+except ImportError:
+  haveH5py = False
+
+def checkH5(path, datasets={}, attrs={}):
+  """Verify an HDF5 output file. Returns None on success, else a message.
+
+  datasets — {name: expected shape}, an entry of None matches any extent
+  attrs    — {(dataset name, attribute name): expected value}
+  """
+  if not os.path.isfile(path):
+    return "missing output file " + path
+
+  with h5py.File(path, "r") as f:
+    for name, shape in datasets.items():
+      if name not in f:
+        return "missing dataset " + name + " in " + os.path.basename(path)
+      if shape is None:
+        continue
+      got = f[name].shape
+      if len(got) != len(shape) or \
+         any(e is not None and g != e for g, e in zip(got, shape)):
+        return "dataset " + name + " has shape " + str(got) + \
+               ", expected " + str(tuple("*" if e is None else e for e in shape))
+
+    for (name, attr), expected in attrs.items():
+      if name not in f:
+        return "missing dataset " + name + " in " + os.path.basename(path)
+      if attr not in f[name].attrs:
+        return "missing attribute " + attr + " on " + name
+      got = f[name].attrs[attr]
+      if hasattr(got, "tolist"):
+        got = got.tolist()
+      if got != expected:
+        return "attribute " + attr + " on " + name + " is " + str(got) + \
+               ", expected " + str(expected)
+
+  return None
+
 def writeReceivers(filename, points):
   file = open(filename, "w")
   file.write(str(len(points)) + "\n")
@@ -136,11 +179,13 @@ def constantAdmittanceLRData(Yinf):
   return [3,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, Yinf]
 
 def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
-         referenceRecvNorm=None, expectAbort=None):
+         referenceRecvNorm=None, expectAbort=None, h5Checks=None):
 
   #referenceDt is None for integrators with a variable sized dt
   #expectAbort is a message the run must fail with, for configurations the
   #solver is required to reject rather than silently reinterpret
+  #h5Checks is a list of (path, datasets, attrs) tuples passed to checkH5 once
+  #the run has passed its norm checks; see checkH5 for the dict formats
 
   #create input file
   writeSetup("setup",settings)
@@ -230,7 +275,27 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
         writeSetup(name,settings)
         failed = 1
       else:
-        print(bcolors.PASS + "PASS" + bcolors.ENDC)
+        #the norm checks passed; now inspect any requested HDF5 output
+        noHDF5 = "built without HDF5" in run.stdout.decode()
+        h5Error = None
+        if h5Checks and haveH5py and not noHDF5:
+          for path, datasets, attrs in h5Checks:
+            h5Error = checkH5(path, datasets, attrs)
+            if h5Error is not None:
+              break
+
+        if h5Error is not None:
+          print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+          print(bcolors.WARNING + "HDF5 output check: " + h5Error + bcolors.ENDC)
+          #save the setup for reproducibility
+          writeSetup(name,settings)
+          failed = 1
+        elif h5Checks and (not haveH5py or noHDF5):
+          reason = "no h5py" if not haveH5py else "built without HDF5"
+          print(bcolors.PASS + "PASS" + bcolors.ENDC +
+                bcolors.WARNING + " (HDF5 checks skipped: " + reason + ")" + bcolors.ENDC)
+        else:
+          print(bcolors.PASS + "PASS" + bcolors.ENDC)
     else:
       #this failure is worse, so dump the whole output for debug
       print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
