@@ -52,16 +52,31 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
 
   NLRPoints = 0;
 
-  if (!settings.hasSetting("LR VECTORFIT FILE")) return;
+  // Count LR faces before anything can return early. Without a fit the surface
+  // kernel yields vn=0 on those faces, which is a rigid wall, so a mesh asking
+  // for LR walls would otherwise be simulated silently as perfectly reflective.
+  // Collective, so every rank aborts together.
+  dlong NLRFaces = 0;
+  for (dlong e = 0; e < mesh.Nelements; ++e)
+    for (int f = 0; f < mesh.Nfaces; ++f)
+      if (mesh.EToB[f + mesh.Nfaces*e] == 3) ++NLRFaces;
+  mesh.comm.Allreduce(NLRFaces, Comm::Sum);
 
   std::string lrFile;
-  settings.getSetting("LR VECTORFIT FILE", lrFile);
+  if (settings.hasSetting("LR VECTORFIT FILE"))
+    settings.getSetting("LR VECTORFIT FILE", lrFile);
+
+  LIBP_ABORT("Mesh has BC==3 (locally-reacting) faces but no LR VECTORFIT FILE",
+             NLRFaces > 0 && lrFile.empty());
+
   if (lrFile.empty()) return;
 
   // ------------------------------------------------------------------ //
   //  Read vectorfit data
   // ------------------------------------------------------------------ //
   FILE* fp = fopen(lrFile.c_str(), "r");
+  LIBP_ABORT("LR VECTORFIT FILE not found: " << lrFile
+             << ", and the mesh has BC==3 faces", !fp && NLRFaces > 0);
   if (!fp) {
     if (mesh.rank == 0)
       printf("WARNING: LR vectorfit file not found: %s — skipping LR BCs\n",
@@ -133,6 +148,10 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
     LRNpoles = 0;
     return;
   }
+
+  // the accumulators are co-advanced by the fixed-step LSERK4 loop in Run()
+  LIBP_ABORT("Locally-reacting boundaries require TIME INTEGRATOR LSERK4",
+             !settings.compareSetting("TIME INTEGRATOR", "LSERK4"));
 
   // ------------------------------------------------------------------ //
   //  Allocate accumulator buffers  acc[NLRPoints * LRNpoles]

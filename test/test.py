@@ -136,9 +136,11 @@ def constantAdmittanceLRData(Yinf):
   return [3,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, Yinf]
 
 def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
-         referenceRecvNorm=None):
+         referenceRecvNorm=None, expectAbort=None):
 
   #referenceDt is None for integrators with a variable sized dt
+  #expectAbort is a message the run must fail with, for configurations the
+  #solver is required to reject rather than silently reinterpret
 
   #create input file
   writeSetup("setup",settings)
@@ -149,6 +151,21 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
   #run test
   run = subprocess.run(["mpirun", "--oversubscribe", "-np", str(ranks), cmd, inputRC],
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+  if expectAbort is not None:
+    output = run.stdout.decode() + run.stderr.decode()
+    if run.returncode == 0:
+      print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+      print(bcolors.WARNING + "Expected the run to be rejected, but it succeeded" + bcolors.ENDC)
+      writeSetup(name,settings)
+      return 1
+    if expectAbort not in output:
+      print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+      print(bcolors.WARNING + "Expected message: " + expectAbort + bcolors.ENDC)
+      writeSetup(name,settings)
+      return 1
+    print(bcolors.PASS + "PASS" + bcolors.ENDC)
+    return 0
 
   if len(run.stdout.decode().splitlines())==0:
     #this failure is bad, dump the whole output for debug

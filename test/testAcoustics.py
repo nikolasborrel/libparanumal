@@ -224,6 +224,16 @@ def main():
                                                impedance=5.0),
                     referenceNorm=0.387475178751856)
 
+  #a mesh with LR walls and no fit must be rejected: the surface kernel would
+  #otherwise yield vn=0 there, silently simulating a perfectly rigid wall
+  failCount += test(name="testAcousticsRoomLRMissingFit",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.1,
+                                               time_integrator="LSERK4"),
+                    referenceNorm=None,
+                    expectAbort="Mesh has BC==3 (locally-reacting) faces but no LR VECTORFIT FILE")
+
   #boundary flag 3 is the locally-reacting BC. A constant surface admittance Y
   #must reproduce the frequency-independent BC with Z = 1/Y
   writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
@@ -233,6 +243,16 @@ def main():
                                                box_dim=2,boundary_flag=3,final_time=2.0,
                                                time_integrator="LSERK4",lr_file=lrFile),
                     referenceNorm=0.387485800176955)
+
+  #the accumulator ODE is co-advanced by a fixed-step loop, so an adaptive
+  #integrator must be rejected rather than silently ignored
+  failCount += test(name="testAcousticsRoomLRDopri5",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.1,
+                                               lr_file=lrFile),
+                    referenceNorm=None,
+                    expectAbort="require TIME INTEGRATOR LSERK4")
 
   failCount += test(name="testAcousticsRoomLRConstantQuad",
                     cmd=acousticsBin,

@@ -76,13 +76,7 @@ void acoustics_t::Run(){
 
   if (LRNpoles > 0) {
     // Custom LSERK4 loop — steps both o_q and o_acc with the same coefficients.
-    // DOPRI5 is not supported with LR BCs (adaptive step control would need
-    // synchronised accumulator error estimation, which is not implemented).
-    if (!settings.compareSetting("TIME INTEGRATOR", "LSERK4")) {
-      if (mesh.rank == 0)
-        printf("ERROR: LR BCs require TIME INTEGRATOR LSERK4\n");
-      exit(1);
-    }
+    // SetupLRBC has already rejected any other integrator.
 
     // the accumulators are advanced explicitly, so the fastest pole has to fit
     // inside the LSERK4 stability region or the solution diverges
