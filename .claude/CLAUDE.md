@@ -25,3 +25,26 @@ extension version it re-creates the listed branches from the current HEAD and
 collapses the whole stack onto one commit. Use `gh stack link` instead.
 
 PR branches follow the naming convention: `feat/acoustics-<slug>`
+
+### Rebasing a stack
+
+`gh stack rebase` cascades across the whole stack, so a conflict is resolved with
+the stack commands, not the plain git ones:
+
+```
+# resolve the conflicted files, then
+git add <resolved-files>
+gh stack rebase --continue     # NOT git rebase --continue
+gh stack rebase --abort        # to back out the whole cascade
+```
+
+`git rebase --continue` finishes only the branch that stopped and leaves the
+remaining layers unrebased. Note that continuing writes a commit, so ask before
+running it.
+
+## Commit messages and PR descriptions
+
+Describe only the delta relative to the parent branch. Never describe a change as
+a fix to code introduced earlier in the same branch — that code does not exist
+from the parent's point of view. Fold the correction into the feature
+description instead.
