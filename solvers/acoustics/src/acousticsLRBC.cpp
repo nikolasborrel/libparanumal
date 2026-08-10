@@ -25,6 +25,8 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 // LR vectorfit file format (matches DTU libparanumal-dtu convention):
@@ -120,16 +122,22 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   }
   NLRPoints = counter;
 
-  if (NLRPoints == 0) {
+  // Every rank builds the same kernels below, so the decision to set LR up has
+  // to be global: a rank owning no BC==3 face still takes part.
+  dlong NLRPointsGlobal = NLRPoints;
+  mesh.comm.Allreduce(NLRPointsGlobal, Comm::Sum);
+
+  if (NLRPointsGlobal == 0) {
     if (mesh.rank == 0)
       printf("WARNING: LR VECTORFIT FILE given but no BC==3 faces found — skipping LR\n");
+    LRNpoles = 0;
     return;
   }
 
   // ------------------------------------------------------------------ //
   //  Allocate accumulator buffers  acc[NLRPoints * LRNpoles]
   // ------------------------------------------------------------------ //
-  const dlong accSize = NLRPoints * LRNpoles;
+  const dlong accSize = std::max(NLRPoints*LRNpoles, (dlong)1);
   acc   .malloc(accSize, 0.0);
   resacc.malloc(accSize, 0.0);
 
@@ -150,6 +158,14 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   const dlong pLRAlpha  = 2*LRNRealPoles + 2*LRNImagPoles;
   const dlong pLRBeta   = 2*LRNRealPoles + 3*LRNImagPoles;
   const dlong pLRYinf   = 2*LRNRealPoles + 4*LRNImagPoles;
+
+  // fastest pole rate, used to check the accumulator ODE against the explicit
+  // time step in Run()
+  LRMaxPole = 0.0;
+  for (dlong i = 0; i < LRNRealPoles; ++i)
+    LRMaxPole = std::max(LRMaxPole, std::abs(LR[pLRLambda + i]));
+  for (dlong i = 0; i < LRNImagPoles; ++i)
+    LRMaxPole = std::max(LRMaxPole, std::hypot(LR[pLRAlpha + i], LR[pLRBeta + i]));
 
   kernelInfo["defines/p_LRLambda"] = (int)pLRLambda;
   kernelInfo["defines/p_LRAlpha"]  = (int)pLRAlpha;
@@ -172,6 +188,6 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
 
   if (mesh.rank == 0)
     printf("LR BCs: %lld boundary points, %lld poles (%lld real, %lld imag pairs)\n",
-           (long long)NLRPoints, (long long)LRNpoles,
+           (long long)NLRPointsGlobal, (long long)LRNpoles,
            (long long)LRNRealPoles, (long long)LRNImagPoles);
 }

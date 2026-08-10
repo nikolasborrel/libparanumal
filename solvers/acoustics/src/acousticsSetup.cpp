@@ -151,7 +151,7 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   // Allocate minimal dummy LR buffers so the surface kernel never receives null
   // pointers on non-LR runs (OCCA crashes on empty device pointers).
-  if (NLRPoints == 0) {
+  if (LRNpoles == 0) {
     memory<dfloat> _lr(1, 0.0);   o_LR     = platform.malloc<dfloat>(_lr);
     memory<dlong>  _li(3, 0LL);   o_LRInfo = platform.malloc<dlong> (_li);
     memory<dlong>  _ma(1, -1LL);  o_mapAcc = platform.malloc<dlong> (_ma);
