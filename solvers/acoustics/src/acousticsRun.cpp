@@ -70,9 +70,13 @@ void acoustics_t::Run(){
   if(mesh.rank==0)
     printf("Time step dt = %17.15lg\n", dt);
 
-  if (useEIRK4 || LRNpoles > 0) {
-    // Custom fixed-step loop — steps both o_q and o_acc. SetupLRBC has already
-    // rejected any integrator that cannot co-advance the accumulators.
+  // sample sets with an initial-only cadence just read the initial condition
+  SampleFields(0, startTime);
+
+  if (useEIRK4 || LRNpoles > 0 || SampleSetsNeedStepControl()) {
+    // Custom fixed-step loop — steps both o_q and o_acc. SetupLRBC and
+    // SetupFieldSampling have already rejected any integrator that can neither
+    // co-advance the accumulators nor hold the step size fixed.
 
     // LSERK4 advances the accumulators explicitly, so the fastest pole has to
     // fit inside its stability region or the solution diverges. This is a bound
@@ -163,6 +167,8 @@ void acoustics_t::Run(){
       step(stepdt);
       time += stepdt;
       tstep++;
+
+      SampleFields(tstep, time);
     }
   } else {
     timeStepper.SetTimeStep(dt);
@@ -172,6 +178,7 @@ void acoustics_t::Run(){
   if (h5Writer) h5Writer->finalize(*this);
 
   WriteReceiverIRs();
+  WriteSampleSets();
 
   // output norm of the sampled receiver record
   if (NReceivers > 0) {

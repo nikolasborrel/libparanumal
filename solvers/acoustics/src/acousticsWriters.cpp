@@ -255,6 +255,49 @@ void xdmfWriter_t::finalize(acoustics_t& ac)
   ofs << "</Xdmf>\n";
 }
 
+// One group per sample set in <SIMULATION ID>_samples.h5:
+//   /<name>/points [npts x 3], /<name>/values [nframes x npts], /<name>/times
+// with the grid shape and generation parameters as attributes on /<name>/points.
+void acoustics_t::WriteSampleSets() {
+  if (sampleSets.empty() || mesh.rank != 0) return;
+
+  const std::string path = outDir + "/" + simulationID + "_samples.h5";
+  File file(path, File::Overwrite);
+
+  for (sampleSet_t& set : sampleSets) {
+    if (set.Npoints == 0 || set.frame == 0) continue;
+    set.o_values.copyTo(set.values);
+
+    const size_t npts    = (size_t)set.Npoints;
+    const size_t nframes = (size_t)set.frame;
+
+    std::vector<std::vector<float>> pts(npts, std::vector<float>(3));
+    for (size_t p = 0; p < npts; ++p)
+      pts[p] = {(float)set.xyz[p*3+0], (float)set.xyz[p*3+1], (float)set.xyz[p*3+2]};
+
+    std::vector<std::vector<float>> vals(nframes, std::vector<float>(npts));
+    for (size_t f = 0; f < nframes; ++f)
+      for (size_t p = 0; p < npts; ++p)
+        vals[f][p] = (float)set.values[p*set.Nframes + f];
+
+    const std::string g = "/" + set.name;
+    file.createDataSet<float> (g + "/points", DataSpace::From(pts)).write(pts);
+    file.createDataSet<float> (g + "/values", DataSpace::From(vals)).write(vals);
+    file.createDataSet<double>(g + "/times",  DataSpace::From(set.times)).write(set.times);
+
+    // C order, so values reshape directly: x varies fastest, z slowest
+    std::vector<int> shape = {set.shape[2], set.shape[1], set.shape[0]};
+    H5Easy::dumpAttribute(file, g + "/points", "grid_shape",  shape);
+    H5Easy::dumpAttribute(file, g + "/points", "dx",          (double)set.dx);
+    H5Easy::dumpAttribute(file, g + "/points", "jitter",      (double)set.jitter);
+    H5Easy::dumpAttribute(file, g + "/points", "seed",        set.seed);
+    H5Easy::dumpAttribute(file, g + "/points", "keep_outside", set.keepOutside ? 1 : 0);
+
+    Logf("  wrote %s:%s (%zu points x %zu frames)\n",
+         path.c_str(), g.c_str(), npts, nframes);
+  }
+}
+
 #else  // !LIBP_HDF5
 
 void acoustics_t::WriteReceiverIRs() {
@@ -262,5 +305,7 @@ void acoustics_t::WriteReceiverIRs() {
   Logf("  receiver impulse responses not written: built without HDF5 "
        "(rebuild with \"make HDF5=1\")\n");
 }
+
+void acoustics_t::WriteSampleSets() {}
 
 #endif // LIBP_HDF5

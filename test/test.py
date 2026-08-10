@@ -166,6 +166,11 @@ def checkXdmf(xdmfPath, h5Path):
 
   return None
 
+def writeSampleSets(filename, lines):
+  file = open(filename, "w")
+  file.write("\n".join(lines) + "\n")
+  file.close()
+
 def writeReceivers(filename, points):
   file = open(filename, "w")
   file.write(str(len(points)) + "\n")

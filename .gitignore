@@ -41,6 +41,7 @@ test/*.rc
 !test/cubeHex.msh
 
 !solvers/acoustics/data/*.dat
+!solvers/acoustics/setups/*.txt
 
 .vimrc
 .occa/
