@@ -78,8 +78,16 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
 
   newSetting("OUTPUT TO FILE",
              "FALSE",
-             "Flag for writing fields to VTU files",
+             "Flag for writing fields to VTU files. Independent of OUTPUT FORMAT: "
+             "a run may write VTU, an HDF5 format, both, or neither",
              {"TRUE", "FALSE"});
+
+  newSetting("OUTPUT FORMAT",
+             "NONE",
+             "Wave-field snapshot format, written on the OUTPUT INTERVAL cadence: "
+             "H5COMPACT (single /pressures dataset) or XDMF (per-step datasets "
+             "plus a ParaView sidecar). Requires a build with HDF5=1",
+             {"NONE", "H5COMPACT", "XDMF"});
 
   newSetting("OUTPUT FILE NAME",
              "acoustics");
@@ -114,6 +122,7 @@ void acousticsSettings_t::report() {
     reportSetting("FINAL TIME");
     reportSetting("OUTPUT INTERVAL");
     reportSetting("OUTPUT TO FILE");
+    reportSetting("OUTPUT FORMAT");
     reportSetting("OUTPUT FILE NAME");
   }
 }

@@ -49,7 +49,7 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
                       impedance=415.0, surface_flux="UPWIND",
                       receiver_file=None, lr_file=None,
-                      output_dir=None, simulation_id=None):
+                      output_dir=None, simulation_id=None, output_format=None):
   settings = [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
           setting_t("DENSITY", density),
@@ -87,6 +87,9 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
 
   if simulation_id is not None:
     settings.append(setting_t("SIMULATION ID", simulation_id))
+
+  if output_format is not None:
+    settings.append(setting_t("OUTPUT FORMAT", output_format))
 
   return settings
 
@@ -147,11 +150,19 @@ def main():
 
   #boundary flag 1 is a rigid wall, flag 2 the frequency-independent impedance
   #BC. The pulse sits at the centre of a 2m box, so it hits the walls at t=1
+  #also covers XDMF wave-field output: the sidecar must reference exactly the
+  #frames written, and snapshots must not perturb the solution
   failCount += test(name="testAcousticsRoomRigidTri",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
-                                               box_dim=2,boundary_flag=1,final_time=2.0),
-                    referenceNorm=0.723214962153181)
+                                               box_dim=2,boundary_flag=1,final_time=2.0,
+                                               output_dir=outDir,simulation_id="wavefield",
+                                               output_format="XDMF"),
+                    referenceNorm=0.723214962153181,
+                    h5Checks=[(outDir + "/wavefield.h5",
+                               {"/data0": (None, 3), "/data1": (None,), "/data2": (None,)},
+                               {})],
+                    xdmfCheck=(outDir + "/wavefield.xdmf", outDir + "/wavefield.h5"))
 
   failCount += test(name="testAcousticsRoomRigidTet",
                     cmd=acousticsBin,
