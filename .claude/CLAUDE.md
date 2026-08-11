@@ -12,13 +12,18 @@ stack with `gh stack link`. Do NOT use `gh stack submit`.
    git push -u origin feat/<slug>
    gh pr create --base <base-branch> --head feat/<slug> ...
    ```
-2. Group the existing open PRs into a gh-stack (local + GitHub tracking) by
-   listing them bottom → top (PR numbers, branches, or URLs):
+2. Group the existing open PRs into a stack on GitHub by listing them
+   bottom → top (PR numbers, branches, or URLs):
    ```
    gh stack link <bottom-PR> <next-PR> ... <top-PR>
    ```
    `gh stack link` adopts the existing open PRs — it does not recreate branches.
-3. Inspect the stack with `gh stack view`.
+3. Adopt the stack locally — `link` writes GitHub state only, so until then
+   `gh stack view` reports "not part of a stack":
+   ```
+   gh stack checkout <stack-number>    # the number link printed
+   ```
+4. Inspect the stack with `gh stack view`, from a branch that is part of it.
 
 Do NOT run `gh stack init` to adopt existing branches: in the installed
 extension version it re-creates the listed branches from the current HEAD and
