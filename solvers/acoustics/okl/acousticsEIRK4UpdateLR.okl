@@ -1,0 +1,97 @@
+/*
+
+The MIT License (MIT)
+
+Copyright (c) 2017-2022 Tim Warburton, Noel Chalmers, Jesse Chan, Ali Karakus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
+// Implicit half of EIRK4 (ARK4(3)6L[2]SA): the locally-reacting accumulators.
+//
+// Solves, for stage 0..4,
+//    (I + dt*gamma*A) X = acc_n + dt*sum_{j<=stage} esdirkA[stage+1][j]*k_j
+//                                + dt*gamma*p(Q_{stage+2})
+// where A is block diagonal: [lambda] for a real pole and [[alpha, beta],
+// [-beta, alpha]] for a complex-conjugate pair, matching the accumulator rhs
+// that lrNormalVelocity writes in the surface kernels. Both blocks invert in
+// closed form, so there is no iteration and no linear solve.
+//
+// gamma is read off the diagonal of esdirkA rather than hard-coded, so the
+// tableau stays the only place the method is defined.
+//
+// Stage 5 has no kernel: the ESDIRK is stiffly accurate (its last row equals b),
+// so X_6 is already acc_{n+1} and the host just copies it.
+//
+// MUST be launched AFTER acousticsEIRK4Update for the same stage — it reads the
+// wall pressure out of the stage field that kernel has just written. That is
+// safe only because libparanumal issues kernels on a single OCCA stream.
+@kernel void acousticsEIRK4UpdateLR(const dlong NLRPoints,
+                                    const dlong Npoles,
+                                    const dlong NRealPoles,
+                                    const int stage,
+                                    const dfloat dt,
+                                    @restrict const  dfloat *  esdirkA,   // [6][6]
+                                    @restrict const  dlong  *  mapAccToQ,
+                                    @restrict const  dfloat *  LR,
+                                    @restrict const  dfloat *  kacc,      // [6*Nacc]
+                                    @restrict const  dfloat *  resq,      // Q_{stage+2}
+                                    @restrict const  dfloat *  acc,       // acc_n
+                                    @restrict        dfloat *  Xacc) {
+
+  for(dlong n=0;n<NLRPoints;++n;@tile(256,@outer,@inner)){
+
+    const dlong  Nacc = NLRPoints*Npoles;
+    const int    row  = stage + 1;
+    const dfloat gdt  = dt*esdirkA[6*row + row];   // dt*gamma
+    const dfloat p    = resq[mapAccToQ[n]];
+    const dlong  base = n*Npoles;
+
+    // real poles: x' = -lambda*x + p
+    for (dlong pi=0;pi<NRealPoles;++pi) {
+      dfloat b = acc[base+pi] + gdt*p;
+      for (int j=0;j<=stage;++j)
+        b += dt*esdirkA[6*row + j]*kacc[j*Nacc + base+pi];
+
+      Xacc[base+pi] = b/(1.0 + gdt*LR[p_LRLambda+pi]);
+    }
+
+    // complex-conjugate pairs: x1' = -alpha*x1 - beta*x2 + p, x2' = -alpha*x2 + beta*x1,
+    // i.e. x' = (-alpha + i*beta)x + p, so the implicit factor is 1 + dt*gamma*(alpha - i*beta)
+    for (dlong pi=NRealPoles;pi<Npoles;pi+=2) {
+      const dlong pIdx = (pi-NRealPoles)/2;
+
+      dfloat b1 = acc[base+pi]   + gdt*p;
+      dfloat b2 = acc[base+pi+1];
+      for (int j=0;j<=stage;++j) {
+        const dfloat a = dt*esdirkA[6*row + j];
+        b1 += a*kacc[j*Nacc + base+pi];
+        b2 += a*kacc[j*Nacc + base+pi+1];
+      }
+
+      const dfloat cr = 1.0 + gdt*LR[p_LRAlpha+pIdx];
+      const dfloat ci =       gdt*LR[p_LRBeta +pIdx];
+      const dfloat id = 1.0/(cr*cr + ci*ci);
+
+      Xacc[base+pi]   = (cr*b1 - ci*b2)*id;
+      Xacc[base+pi+1] = (ci*b1 + cr*b2)*id;
+    }
+  }
+}
