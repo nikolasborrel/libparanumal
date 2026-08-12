@@ -69,34 +69,42 @@ void acoustics_t::Run(){
   dfloat hmin = mesh.MinCharacteristicLength();
   dfloat vmax = MaxWaveSpeed();
   dfloat dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
-  timeStepper.SetTimeStep(dt);
 
   if(mesh.rank==0)
     printf("Time step dt = %17.15lg\n", dt);
 
-  if (LRNpoles > 0) {
-    // Custom LSERK4 loop — steps both o_q and o_acc with the same coefficients.
-    // SetupLRBC has already rejected any other integrator.
+  if (useEIRK4 || LRNpoles > 0) {
+    // Custom fixed-step loop — steps both o_q and o_acc. SetupLRBC has already
+    // rejected any integrator that cannot co-advance the accumulators.
 
-    // the accumulators are advanced explicitly, so the fastest pole has to fit
-    // inside the LSERK4 stability region or the solution diverges
+    // LSERK4 advances the accumulators explicitly, so the fastest pole has to
+    // fit inside its stability region or the solution diverges. This is a bound
+    // on the material fit, not on the mesh, so refining does not always help —
+    // EIRK4 treats the accumulators implicitly and removes it entirely.
     const dfloat lserk4Stability = 2.78;
-    if (mesh.rank == 0 && LRMaxPole*dt > lserk4Stability)
-      printf("WARNING: LR pole rate %.4lg 1/s is unstable at dt %.4lg, "
-             "refine the mesh or use CFL NUMBER <= %.4lg\n",
-             LRMaxPole, dt, cfl*lserk4Stability/(LRMaxPole*dt));
+    LIBP_ABORT("LR pole rate " << LRMaxPole << " 1/s exceeds the LSERK4 stability "
+               "bound at dt " << dt << ". Use TIME INTEGRATOR EIRK4, or CFL NUMBER <= "
+               << cfl*lserk4Stability/(LRMaxPole*dt),
+               !useEIRK4 && LRMaxPole*dt > lserk4Stability);
 
     const dlong N    = mesh.Nelements * mesh.Np * Nfields;
     const dlong Nacc = NLRPoints * LRNpoles;
 
-    deviceMemory<dfloat> o_resq = platform.malloc<dfloat>(N);
-    deviceMemory<dfloat> o_rhsq = platform.malloc<dfloat>(N);
+    deviceMemory<dfloat> o_resq, o_rhsq;
+    kernel_t updateKernelQ;
 
-    // Build the same LSERK4 update kernel the built-in timeStepper uses
-    properties_t kInfo = platform.props();
-    kInfo["defines/p_blockSize"] = 256;
-    kernel_t updateKernelQ = platform.buildKernel(
-        LIBP_DIR "/libs/timeStepper/okl/timeStepperLSERK4.okl", "lserk4Update", kInfo);
+    if (useEIRK4) {
+      SetupEIRK4();
+    } else {
+      o_resq = platform.malloc<dfloat>(N);
+      o_rhsq = platform.malloc<dfloat>(N);
+
+      // Build the same LSERK4 update kernel the built-in timeStepper uses
+      properties_t kInfo = platform.props();
+      kInfo["defines/p_blockSize"] = 256;
+      updateKernelQ = platform.buildKernel(
+          LIBP_DIR "/libs/timeStepper/okl/timeStepperLSERK4.okl", "lserk4Update", kInfo);
+    }
 
     dfloat outputInterval;
     settings.getSetting("OUTPUT INTERVAL", outputInterval);
@@ -124,31 +132,39 @@ void acoustics_t::Run(){
       }
     };
 
+    auto step = [&](dfloat stepdt) {
+      if (useEIRK4) StepEIRK4(time, stepdt);
+      else          stepLSERK4(stepdt);
+    };
+
     while (time < finalTime) {
       dfloat stepdt = (time + dt > finalTime) ? finalTime - time : dt;
 
       if (time < outputTime && time + stepdt >= outputTime) {
+        // EIRK4 needs no residual register saved: its stage buffers are written
+        // in full at stage 1 from o_q and o_acc, and carry nothing across steps
         o_saveq  .copyFrom(o_q,    N + mesh.totalHaloPairs*mesh.Np*Nfields);
         if (Nacc > 0) {
           o_saveacc.copyFrom(o_acc,    Nacc);
-          o_saveres.copyFrom(o_resacc, Nacc);
+          if (!useEIRK4) o_saveres.copyFrom(o_resacc, Nacc);
         }
         dfloat smalldt = outputTime - time;
-        stepLSERK4(smalldt);
+        step(smalldt);
         Report(outputTime, tstep);
         o_q.copyFrom(o_saveq, N + mesh.totalHaloPairs*mesh.Np*Nfields);
         if (Nacc > 0) {
           o_acc   .copyFrom(o_saveacc, Nacc);
-          o_resacc.copyFrom(o_saveres, Nacc);
+          if (!useEIRK4) o_resacc.copyFrom(o_saveres, Nacc);
         }
         outputTime += outputInterval;
       }
 
-      stepLSERK4(stepdt);
+      step(stepdt);
       time += stepdt;
       tstep++;
     }
   } else {
+    timeStepper.SetTimeStep(dt);
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
 

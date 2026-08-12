@@ -167,9 +167,9 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
     return;
   }
 
-  // the accumulators are co-advanced by the fixed-step LSERK4 loop in Run()
-  LIBP_ABORT("Locally-reacting boundaries require TIME INTEGRATOR LSERK4",
-             !settings.compareSetting("TIME INTEGRATOR", "LSERK4"));
+  // the accumulators are co-advanced by a fixed-step loop in Run()
+  LIBP_ABORT("Locally-reacting boundaries require TIME INTEGRATOR LSERK4 or EIRK4",
+             !settings.compareSetting("TIME INTEGRATOR", "LSERK4") && !useEIRK4);
 
   // ------------------------------------------------------------------ //
   //  Allocate accumulator buffers  acc[NLRPoints * LRNpoles]
@@ -197,13 +197,18 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   const dlong pLRBeta   = 2*LRNRealPoles + 3*LRNImagPoles;
   const dlong pLRYinf   = 2*LRNRealPoles + 4*LRNImagPoles;
 
-  // fastest pole rate, used to check the accumulator ODE against the explicit
-  // time step in Run()
+  // Fastest pole rate, used to check the accumulator ODE against the explicit
+  // time step in Run(). Poles with a zero residue are skipped: they contribute
+  // nothing to the wall velocity, so their accumulator is inert and its
+  // stability does not bound the step. A fit of a constant admittance is all
+  // such poles.
   LRMaxPole = 0.0;
   for (dlong i = 0; i < LRNRealPoles; ++i)
-    LRMaxPole = std::max(LRMaxPole, std::abs(LR[pLRLambda + i]));
+    if (LR[pLRA + i] != 0.0)
+      LRMaxPole = std::max(LRMaxPole, std::abs(LR[pLRLambda + i]));
   for (dlong i = 0; i < LRNImagPoles; ++i)
-    LRMaxPole = std::max(LRMaxPole, std::hypot(LR[pLRAlpha + i], LR[pLRBeta + i]));
+    if (LR[pLRB + i] != 0.0 || LR[pLRC + i] != 0.0)
+      LRMaxPole = std::max(LRMaxPole, std::hypot(LR[pLRAlpha + i], LR[pLRBeta + i]));
 
   kernelInfo["defines/p_LRLambda"] = (int)pLRLambda;
   kernelInfo["defines/p_LRAlpha"]  = (int)pLRAlpha;
@@ -223,6 +228,16 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
       DACOUSTICS "okl/acousticsUpdateLR.okl",
       "acousticsUpdateLRAcc",
       lrInfo);
+
+  // The EIRK4 accumulator solve needs the p_LR* offsets, which only exist on
+  // kernelInfo — lrInfo above is a fresh copy of mesh.props and does not carry
+  // them. Gated on the integrator, which is uniform across ranks; buildKernel is
+  // collective, so gating on anything rank-local would deadlock.
+  if (useEIRK4)
+    updateKernelEIRK4LR = platform.buildKernel(
+        DACOUSTICS "okl/acousticsEIRK4UpdateLR.okl",
+        "acousticsEIRK4UpdateLR",
+        kernelInfo);
 
   if (mesh.rank == 0)
     printf("LR BCs: %lld boundary points, %lld poles (%lld real, %lld imag pairs)\n",

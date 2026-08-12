@@ -65,6 +65,12 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
     timeStepper.Setup<TimeStepper::dopri5>(mesh.Nelements,
                                            mesh.totalHaloPairs,
                                            mesh.Np, Nfields, platform, comm);
+  } else if (settings.compareSetting("TIME INTEGRATOR","EIRK4")){
+    // driven by StepEIRK4 out of Run(), not by the timeStepper library: the
+    // scheme co-advances the LR accumulators, which are not mesh-shaped state
+    useEIRK4 = true;
+  } else {
+    LIBP_FORCE_ABORT("Requested TIME INTEGRATOR not found.");
   }
 
   // set penalty parameter

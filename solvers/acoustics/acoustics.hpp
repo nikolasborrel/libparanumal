@@ -113,6 +113,23 @@ public:
 
   kernel_t updateKernelLR;
 
+  // EIRK4 — ARK4(3)6L[2]SA additive Runge-Kutta. Explicit for the wave field,
+  // L-stable ESDIRK for the LR accumulators, so the pole rates of the vectorfit
+  // no longer constrain dt. See src/acousticsEIRK4.cpp.
+  bool useEIRK4 = false;
+
+  deviceMemory<dfloat> o_erkA, o_erkB, o_esdirkA;
+  deviceMemory<dfloat> o_eirkResq;  // field stage value, halo-sized
+  deviceMemory<dfloat> o_eirkXacc;  // accumulator stage value
+  deviceMemory<dfloat> o_eirkKq;    // [6 x N]    field stage derivatives
+  deviceMemory<dfloat> o_eirkKacc;  // [6 x Nacc] accumulator stage derivatives
+
+  kernel_t updateKernelEIRK4;
+  kernel_t updateKernelEIRK4LR;
+
+  void SetupEIRK4();
+  void StepEIRK4(dfloat time, dfloat stepdt);
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {

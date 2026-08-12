@@ -53,8 +53,10 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
 
   newSetting("TIME INTEGRATOR",
              "DOPRI5",
-             "Time integration method",
-             {"AB3", "DOPRI5", "LSERK4"});
+             "Time integration method. EIRK4 is an additive Runge-Kutta scheme "
+             "that treats the locally-reacting accumulators implicitly, so a "
+             "stiff surface admittance does not restrict the time step",
+             {"AB3", "DOPRI5", "LSERK4", "EIRK4"});
 
   newSetting("CFL NUMBER",
              "1.0",
