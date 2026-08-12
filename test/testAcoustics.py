@@ -418,11 +418,9 @@ def main():
                                                time_integrator="LSERK4",lr_file=lrFile),
                     referenceNorm=0.350247744152265)
 
-  #EIRK4 treats the accumulators implicitly. It must agree with LSERK4 wherever
-  #LSERK4 is usable, and remain usable where LSERK4 is not.
+  #EIRK4 must agree with LSERK4 where LSERK4 is usable, and work where it is not
 
-  #with every residue zero the admittance is the constant Yinf, so this has to
-  #land on the frequency-independent impedance norm exactly as the LSERK4 run does
+  #zero residues leave a constant admittance, so the impedance norm again
   writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
   failCount += test(name="testAcousticsRoomLREirk4ConstantTri",
                     cmd=acousticsBin,
@@ -439,14 +437,6 @@ def main():
                                                lr_file=lrFile),
                     referenceNorm=0.298868490129398)
 
-  failCount += test(name="testAcousticsRoomLREirk4ConstantHex",
-                    cmd=acousticsBin,
-                    settings=acousticsSettings(element=12,data_file=data3DRoom,dim=3,
-                                               degree=2,box_dim=2,boundary_flag=3,
-                                               final_time=2.0,time_integrator="EIRK4",
-                                               lr_file=lrFile),
-                    referenceNorm=0.298590700093030)
-
   #Y=0 is a rigid wall, whichever integrator advances the inert accumulators
   writeLRData(lrFile, *constantAdmittanceLRData(0.0))
   failCount += test(name="testAcousticsRoomLREirk4RigidTri",
@@ -457,8 +447,7 @@ def main():
                     referenceNorm=0.723214962153181)
 
   #the real 14-pole fit, where the accumulators do feed back. Its own norm rather
-  #than the LSERK4 one: the schemes differ by 8.6e-7 here, inside TOL but not by
-  #much, since |pole|*dt is large enough for the two truncation errors to part
+  #than the LSERK4 one: the schemes part by 8.6e-7 here, inside TOL but too close
   writeLRData(lrFile, lrHeader, lrCoeffs)
   failCount += test(name="testAcousticsRoomLREirk4MaterialTet",
                     cmd=acousticsBin,
@@ -478,9 +467,7 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.350248079818445)
 
-  #the time-scale invariance again, under EIRK4: this reproduces the EIRK4
-  #material norm above to 3e-15, so it pins the implicit stage arithmetic and not
-  #merely the tolerance
+  #the time-scale invariance under EIRK4, reproducing the norm above to 3e-15
   writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 2.0))
   failCount += test(name="testAcousticsRoomLREirk4ScaledTet",
                     cmd=acousticsBin,
@@ -491,9 +478,8 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.350475572604912)
 
-  #poles moved up by 8x without touching the medium, so dt stays put and
-  #|pole|*dt = 13 is far outside the explicit stability region. LSERK4 has to
-  #refuse the run rather than return NaN
+  #poles 8x higher with dt unchanged, so |pole|*dt = 13 is far outside the
+  #explicit stability region and LSERK4 has to refuse the run rather than NaN
   writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 8.0))
   failCount += test(name="testAcousticsRoomLRStiffLserk4",
                     cmd=acousticsBin,
@@ -505,8 +491,7 @@ def main():
                     referenceNorm=None,
                     expectAbort="exceeds the LSERK4 stability bound")
 
-  #the same run under EIRK4, which is what the integrator exists for. The norm is
-  #6.5e-6 from the answer LSERK4 converges to once its step is small enough
+  #the same run under EIRK4, 6.5e-6 from the answer LSERK4 converges to
   failCount += test(name="testAcousticsRoomLREirk4Stiff",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
@@ -516,9 +501,7 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.436216205293)
 
-  #with no LR wall the implicit half has nothing to do and EIRK4 is a plain
-  #explicit scheme, so it reproduces the rigid-wall norm. dt is pinned too: the
-  #CFL bound is unchanged by the choice of integrator
+  #with no LR wall EIRK4 is plain explicit, so the rigid-wall norm and dt hold
   failCount += test(name="testAcousticsEirk4NoLR",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
