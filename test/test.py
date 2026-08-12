@@ -101,7 +101,8 @@ def writeSetup(filename, settings):
   file.write(str_settings)
   file.close()
 
-def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None):
+def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
+         referenceRecvNorm=None):
 
   #referenceDt is None for integrators with a variable sized dt
 
@@ -147,6 +148,12 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None):
           if "Time step dt = " in line:
             dt = float(line.split()[4])
 
+      recvNorm=None
+      if referenceRecvNorm is not None:
+        for line in run.stdout.decode().splitlines():
+          if "Receiver norm = " in line:
+            recvNorm = float(line.split()[3])
+
       if abs(norm - referenceNorm) >= TOL:
         #failed residual check
         print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
@@ -160,6 +167,14 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None):
         print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
         print(bcolors.WARNING + "Expected dt: " + str(referenceDt) + bcolors.ENDC)
         print(bcolors.WARNING + "Observed dt: " + str(dt) + bcolors.ENDC)
+        #save the setup for reproducibility
+        writeSetup(name,settings)
+        failed = 1
+      elif referenceRecvNorm is not None and abs(recvNorm - referenceRecvNorm) >= TOL:
+        #failed receiver check
+        print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+        print(bcolors.WARNING + "Expected receiver norm: " + str(referenceRecvNorm) + bcolors.ENDC)
+        print(bcolors.WARNING + "Observed receiver norm: " + str(recvNorm) + bcolors.ENDC)
         #save the setup for reproducibility
         writeSetup(name,settings)
         failed = 1

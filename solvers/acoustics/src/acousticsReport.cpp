@@ -30,6 +30,14 @@ void acoustics_t::Report(dfloat time, int tstep){
 
   static int frame=0;
 
+  // Sample receivers at this output instant
+  if (NReceiversLocal > 0 && recvSampleIdx < NRecvSamples) {
+    receiverKernel(NReceiversLocal, recvSampleIdx,
+                   o_qRecv, o_recvElements, o_recvElementsIdx,
+                   o_recvIP, o_q);
+    recvSampleIdx++;
+  }
+
   //compute q.M*q
   mesh.MassMatrixApply(o_q, o_Mq);
 

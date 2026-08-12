@@ -54,6 +54,21 @@ void acoustics_t::Run(){
 
   timeStepper.Run(*this, o_q, startTime, finalTime);
 
+  // output norm of the sampled receiver record
+  if (NReceivers > 0) {
+    dfloat recvNorm2 = 0.0;
+
+    if (NReceiversLocal > 0) {
+      o_qRecv.copyTo(qRecv);
+      for (dlong n=0;n<NReceiversLocal*NRecvSamples;++n)
+        recvNorm2 += qRecv[n]*qRecv[n];
+    }
+    mesh.comm.Allreduce(recvNorm2, Comm::Sum);
+
+    if(mesh.rank==0)
+      printf("Receiver norm = %17.15lg\n", sqrt(recvNorm2));
+  }
+
   // output norm of final solution
   {
     //compute q.M*q
