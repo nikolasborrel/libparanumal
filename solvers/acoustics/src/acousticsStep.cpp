@@ -32,6 +32,13 @@ dfloat acoustics_t::MaxWaveSpeed(){
 
 //evaluate ODE rhs = f(q,t)
 void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, const dfloat T){
+  rhsf(o_Q, o_RHS, o_acc, o_rhsacc, T);
+}
+
+//as above, on caller-supplied accumulator buffers
+void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS,
+                       deviceMemory<dfloat>& o_ACC, deviceMemory<dfloat>& o_RHSACC,
+                       const dfloat T){
 
   // extract q halo on DEVICE
   traceHalo.ExchangeStart(o_Q, 1);
@@ -56,7 +63,7 @@ void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, c
                   mesh.o_z,
                   o_Q,
                   o_RHS,
-                  o_acc, o_rhsacc, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
+                  o_ACC, o_RHSACC, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
 
   traceHalo.ExchangeFinish(o_Q, 1);
 
@@ -74,5 +81,5 @@ void acoustics_t::rhsf(deviceMemory<dfloat>& o_Q, deviceMemory<dfloat>& o_RHS, c
                   mesh.o_z,
                   o_Q,
                   o_RHS,
-                  o_acc, o_rhsacc, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
+                  o_ACC, o_RHSACC, o_mapAcc, o_LR, o_LRInfo, NLRPoints);
 }

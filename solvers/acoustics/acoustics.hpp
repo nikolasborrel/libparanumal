@@ -132,6 +132,12 @@ public:
 
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
 
+  // rhsf on explicit accumulator buffers, for schemes that stage the LR
+  // accumulators separately from o_acc. The two-buffer form above forwards here.
+  void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs,
+            deviceMemory<dfloat>& o_ACC, deviceMemory<dfloat>& o_RHSACC,
+            const dfloat time);
+
   dfloat MaxWaveSpeed();
 };
 
