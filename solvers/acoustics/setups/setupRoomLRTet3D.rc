@@ -37,7 +37,7 @@ CUDA
 [DEVICE NUMBER]
 0
 
-[TIME INTEGRATOR]
+[TIME INTEGRATOR] # EIRK4 treats the LR poles implicitly, so only the CFL bounds dt
 EIRK4
 
 [START TIME]
