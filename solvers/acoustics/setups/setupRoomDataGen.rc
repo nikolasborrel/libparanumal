@@ -1,0 +1,100 @@
+[FORMAT]
+2.0
+
+# Machine-learning data generation: a 3 m impedance-walled room driven by a
+# Gaussian pulse, sampled onto the grids declared in SAMPLE SETS FILE.
+# Needs a build with HDF5 support:  make HDF5=1
+# See README.md for the output layout and how to sweep this over a dataset.
+
+[DATA FILE]
+data/acousticsGaussianFmax3D.h
+
+[MESH FILE]
+BOX
+
+[MESH DIMENSION]
+3
+
+[ELEMENT TYPE] # number of edges
+6
+
+[BOX DIMX]
+3
+
+[BOX DIMY]
+3
+
+[BOX DIMZ]
+3
+
+[BOX NX]
+6
+
+[BOX NY]
+6
+
+[BOX NZ]
+6
+
+# 2 = frequency-independent impedance walls
+[BOX BOUNDARY FLAG]
+2
+
+[POLYNOMIAL DEGREE]
+4
+
+[THREAD MODEL]
+CUDA
+
+[PLATFORM NUMBER]
+0
+
+[DEVICE NUMBER]
+0
+
+# a step cadence needs fixed steps
+[TIME INTEGRATOR]
+LSERK4
+
+[START TIME]
+0
+
+[FINAL TIME]
+0.02
+
+[CFL NUMBER]
+1.0
+
+[DENSITY]
+1.2
+
+[SPEED OF SOUND]
+343.0
+
+[FREQINDEP IMPEDANCE]
+7400.0
+
+# drives the source width (sigma = 2c/(pi*FMAX)) and both sample grid spacings
+[FMAX]
+500.0
+
+[SOURCE X]
+0.6
+
+[SOURCE Y]
+-0.4
+
+[SOURCE Z]
+0.2
+
+[SAMPLE SETS FILE]
+setups/sampleSetsDeepONet.txt
+
+[OUTPUT TO FILE]
+FALSE
+
+[OUTPUT DIRECTORY]
+out/
+
+[SIMULATION ID]
+room_train_000

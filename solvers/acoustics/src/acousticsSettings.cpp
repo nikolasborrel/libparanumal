@@ -117,6 +117,11 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "",
              "Path to vectorfit data file for LR BCs (optional; required when BOX BOUNDARY FLAG or mesh has BC type 3)");
 
+  newSetting("SAMPLE SETS FILE",
+             "",
+             "Path to a sample-set definition file (optional). Each set records the "
+             "field on its own point grid and cadence into <SIMULATION ID>_samples.h5");
+
   newSetting("RECEIVER FILE",
              "",
              "Path to receiver locations file (optional)");

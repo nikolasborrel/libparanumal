@@ -1,0 +1,11 @@
+# Sample sets for operator-learning datasets (DeepONet and similar), referenced
+# from setupRoomDataGen.rc. Nothing here is specific to a model architecture —
+# the names below are just HDF5 group names. See README.md.
+
+# Where the operator is evaluated. Jittered so each run in the dataset covers
+# different locations and the model cannot key on a fixed grid; vary seed per run.
+name=trunk ppw=4 jitter=0.5 seed=0 cadence=ppp:10
+
+# The input function: the initial condition on a coarser rectilinear grid.
+# outside=keep holds the nx*ny*nz shape, so values reshape to a 3-D tensor.
+name=branch ppw=2 outside=keep cadence=initial

@@ -1,0 +1,21 @@
+# Sample-set definitions, referenced from a setup via [SAMPLE SETS FILE].
+# One set per line; each is written to its own group of <SIMULATION ID>_samples.h5.
+#
+#   name=<group>     group name in the output file
+#   ppw=<n>          grid spacing as points per wavelength at FMAX (dx = c/(FMAX*ppw))
+#   dx=<m>           grid spacing in metres, instead of ppw
+#   jitter=<f>       offset each point by U(-f*dx, +f*dx) per axis
+#   seed=<i>         RNG seed for the jitter
+#   outside=drop     drop points outside the domain (default)
+#   outside=keep     keep them as zeros, preserving the rectilinear shape, which
+#                    is written as the grid_shape attribute in C order (nz,ny,nx)
+#   cadence=initial          sample the initial condition only
+#   cadence=interval:<s>     sample every <s> seconds
+#   cadence=ppp:<n>          sample n times per period at FMAX (n >= 2)
+#
+# Jittered coordinates make each run sample different locations, which is useful
+# when the output trains a model that should not key on a fixed grid; vary seed
+# between runs. A step cadence requires TIME INTEGRATOR LSERK4.
+
+name=volume ppw=4 jitter=0.5 seed=0 cadence=ppp:20
+name=source ppw=2 outside=keep cadence=initial

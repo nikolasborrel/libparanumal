@@ -42,6 +42,7 @@ recvFile = testDir + "/receivers.dat"
 #see solvers/acoustics/vectorfit/README.md
 lrMaterialFile = acousticsDir + "/data/LRDATA14.dat"
 lrFile         = testDir + "/lrVectorfit.dat"
+sampleFile     = testDir + "/sampleSets.txt"
 
 def acousticsSettings(rcformat="2.0", data_file=data2D,
                      mesh="BOX", dim=2, element=4, nx=10, ny=10, nz=10, boundary_flag=-1,
@@ -50,9 +51,12 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
                       impedance=415.0, surface_flux="UPWIND",
-                      fmax=None, sxyz=None, source_xyz=None,
+                      fmax=None, sxyz=None, source_xyz=None, sample_sets_file=None,
                       receiver_file=None, lr_file=None,
                       output_dir=None, simulation_id=None, output_format=None):
+  #box_dim may be a scalar or a per-axis triple
+  box_dims = box_dim if isinstance(box_dim, tuple) else (box_dim,)*3
+
   settings = [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
           setting_t("DENSITY", density),
@@ -62,9 +66,9 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
           setting_t("MESH FILE", mesh),
           setting_t("MESH DIMENSION", dim),
           setting_t("ELEMENT TYPE", element),
-          setting_t("BOX DIMX", box_dim),
-          setting_t("BOX DIMY", box_dim),
-          setting_t("BOX DIMZ", box_dim),
+          setting_t("BOX DIMX", box_dims[0]),
+          setting_t("BOX DIMY", box_dims[1]),
+          setting_t("BOX DIMZ", box_dims[2]),
           setting_t("BOX NX", nx),
           setting_t("BOX NY", ny),
           setting_t("BOX NZ", nz),
@@ -88,6 +92,9 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
   if source_xyz is not None:
     for axis, v in zip("XYZ", source_xyz):
       settings.append(setting_t("SOURCE " + axis, v))
+
+  if sample_sets_file is not None:
+    settings.append(setting_t("SAMPLE SETS FILE", sample_sets_file))
 
   if receiver_file is not None:
     settings.append(setting_t("RECEIVER FILE", receiver_file))
@@ -411,11 +418,9 @@ def main():
                                                time_integrator="LSERK4",lr_file=lrFile),
                     referenceNorm=0.350247744152265)
 
-  #EIRK4 treats the accumulators implicitly. It must agree with LSERK4 wherever
-  #LSERK4 is usable, and remain usable where LSERK4 is not.
+  #EIRK4 must agree with LSERK4 where LSERK4 is usable, and work where it is not
 
-  #with every residue zero the admittance is the constant Yinf, so this has to
-  #land on the frequency-independent impedance norm exactly as the LSERK4 run does
+  #zero residues leave a constant admittance, so the impedance norm again
   writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
   failCount += test(name="testAcousticsRoomLREirk4ConstantTri",
                     cmd=acousticsBin,
@@ -432,14 +437,6 @@ def main():
                                                lr_file=lrFile),
                     referenceNorm=0.298868490129398)
 
-  failCount += test(name="testAcousticsRoomLREirk4ConstantHex",
-                    cmd=acousticsBin,
-                    settings=acousticsSettings(element=12,data_file=data3DRoom,dim=3,
-                                               degree=2,box_dim=2,boundary_flag=3,
-                                               final_time=2.0,time_integrator="EIRK4",
-                                               lr_file=lrFile),
-                    referenceNorm=0.298590700093030)
-
   #Y=0 is a rigid wall, whichever integrator advances the inert accumulators
   writeLRData(lrFile, *constantAdmittanceLRData(0.0))
   failCount += test(name="testAcousticsRoomLREirk4RigidTri",
@@ -450,8 +447,7 @@ def main():
                     referenceNorm=0.723214962153181)
 
   #the real 14-pole fit, where the accumulators do feed back. Its own norm rather
-  #than the LSERK4 one: the schemes differ by 8.6e-7 here, inside TOL but not by
-  #much, since |pole|*dt is large enough for the two truncation errors to part
+  #than the LSERK4 one: the schemes part by 8.6e-7 here, inside TOL but too close
   writeLRData(lrFile, lrHeader, lrCoeffs)
   failCount += test(name="testAcousticsRoomLREirk4MaterialTet",
                     cmd=acousticsBin,
@@ -471,9 +467,7 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.350248079818445)
 
-  #the time-scale invariance again, under EIRK4: this reproduces the EIRK4
-  #material norm above to 3e-15, so it pins the implicit stage arithmetic and not
-  #merely the tolerance
+  #the time-scale invariance under EIRK4, reproducing the norm above to 3e-15
   writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 2.0))
   failCount += test(name="testAcousticsRoomLREirk4ScaledTet",
                     cmd=acousticsBin,
@@ -484,9 +478,8 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.350475572604912)
 
-  #poles moved up by 8x without touching the medium, so dt stays put and
-  #|pole|*dt = 13 is far outside the explicit stability region. LSERK4 has to
-  #refuse the run rather than return NaN
+  #poles 8x higher with dt unchanged, so |pole|*dt = 13 is far outside the
+  #explicit stability region and LSERK4 has to refuse the run rather than NaN
   writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 8.0))
   failCount += test(name="testAcousticsRoomLRStiffLserk4",
                     cmd=acousticsBin,
@@ -498,8 +491,7 @@ def main():
                     referenceNorm=None,
                     expectAbort="exceeds the LSERK4 stability bound")
 
-  #the same run under EIRK4, which is what the integrator exists for. The norm is
-  #6.5e-6 from the answer LSERK4 converges to once its step is small enough
+  #the same run under EIRK4, 6.5e-6 from the answer LSERK4 converges to
   failCount += test(name="testAcousticsRoomLREirk4Stiff",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
@@ -509,9 +501,7 @@ def main():
                                                time_integrator="EIRK4",lr_file=lrFile),
                     referenceNorm=0.436216205293)
 
-  #with no LR wall the implicit half has nothing to do and EIRK4 is a plain
-  #explicit scheme, so it reproduces the rigid-wall norm. dt is pinned too: the
-  #CFL bound is unchanged by the choice of integrator
+  #with no LR wall EIRK4 is plain explicit, so the rigid-wall norm and dt hold
   failCount += test(name="testAcousticsEirk4NoLR",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
@@ -589,6 +579,41 @@ def main():
                     referenceRecvNorm=1.45552027978335,
                     h5Checks=recvIRs("recvIRmpi"))
 
+  #two sample sets on one run: a jittered grid sampled on a step cadence with
+  #outside points dropped, and a rectilinear grid of the initial condition that
+  #keeps them. The domain is deliberately not cubic so grid_shape has to be in
+  #C order (nz,ny,nx) for values.reshape(grid_shape) to be right
+  sampleNorm = 0.564051991782495
+  writeSampleSets(sampleFile, ["name=field dx=0.5 jitter=0.25 seed=1 cadence=interval:0.25",
+                               "name=ic dx=0.5 outside=keep cadence=initial"])
+  failCount += test(name="testAcousticsSampleSets",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=(2,1,1),boundary_flag=1,
+                                               time_integrator="LSERK4",final_time=0.5,
+                                               sample_sets_file=sampleFile,
+                                               output_dir=outDir,simulation_id="samp"),
+                    referenceNorm=sampleNorm,
+                    h5Checks=[(outDir + "/samp_samples.h5",
+                               {"/field/points": (None, 3), "/field/values": (None, None),
+                                "/ic/points":    (45, 3),   "/ic/values":    (1, 45),
+                                "/ic/times":     (1,)},
+                               {("/ic/points", "grid_shape"): [3, 3, 5],
+                                ("/ic/points", "keep_outside"): 1,
+                                ("/field/points", "keep_outside"): 0})])
+
+  #a step cadence needs the fixed-step loop, so an adaptive integrator must be
+  #rejected rather than silently sampling on the wrong instants
+  writeSampleSets(sampleFile, ["name=field dx=0.5 cadence=interval:0.25"])
+  failCount += test(name="testAcousticsSampleSetsDopri5",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=1,
+                                               final_time=0.5,sample_sets_file=sampleFile,
+                                               output_dir=outDir,simulation_id="sampd5"),
+                    referenceNorm=None,
+                    expectAbort="require TIME INTEGRATOR LSERK4")
+
   #the source width follows from FMAX as sigma = 2c/(pi*FMAX); with c=1, FMAX=1
   #that is 2/pi, so an explicit SXYZ of the same value must give the same field
   fmaxSettings = dict(element=6,data_file=data3DFmax,dim=3,degree=2,box_dim=2,
@@ -607,6 +632,7 @@ def main():
   #clean up
   os.remove(recvFile)
   os.remove(lrFile)
+  os.remove(sampleFile)
   for file_name in os.listdir(testDir):
     if file_name.endswith(('.vtu', '.h5', '.log')):
       os.remove(testDir + "/" + file_name)

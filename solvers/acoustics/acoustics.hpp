@@ -43,6 +43,7 @@ SOFTWARE.
 using namespace libp;
 
 #include "src/acousticsWriters.hpp"
+#include "src/fieldSampling.hpp"
 
 class acousticsSettings_t: public settings_t {
 public:
@@ -152,6 +153,8 @@ public:
   std::vector<dfloat> timeStepsOut;  // planned output times, for preallocation
   std::vector<dfloat> outputTimes;   // times actually written
 
+  std::vector<sampleSet_t> sampleSets;
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {
@@ -191,6 +194,14 @@ public:
   void ComputeTimeStep();
 
   void WriteReceiverIRs();
+
+  void ParseSampleSets(const std::string& path);
+  void SetupFieldSampling();
+  void SampleFields(int tstep, dfloat time);
+  void WriteSampleSets();
+
+  // true when a set samples on a step cadence, which needs fixed-step control
+  bool SampleSetsNeedStepControl() const;
 };
 
 #endif

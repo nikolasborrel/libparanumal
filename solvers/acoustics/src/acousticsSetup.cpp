@@ -213,6 +213,8 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   // Setup receiver interpolation (builds kernel + allocates buffers)
   SetupReceivers();
+
+  SetupFieldSampling();
 }
 
 void acoustics_t::SetupOutput()
