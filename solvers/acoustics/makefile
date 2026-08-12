@@ -58,12 +58,16 @@ make help
    Display this help message.
 make test
    Run tests.
+make fetch-highfive
+   Clone the header-only HighFive library into third_party/ (needed once
+   before building with HDF5=1, unless HIGHFIVE_INC points at a checkout).
 Can use "make verbose=true" for verbose output.
+Can use "make HDF5=1" to enable the HDF5 output paths (off by default).
 
 endef
 
 ifeq (,$(filter acousticsMain lib clean clean-libs clean-kernels \
-                realclean info help test,$(MAKECMDGOALS)))
+                realclean info help test fetch-highfive,$(MAKECMDGOALS)))
 ifneq (,$(MAKECMDGOALS))
 $(error ${ACOUSTICS_HELP_MSG})
 endif
@@ -80,9 +84,32 @@ endif
 #libraries
 ACOUSTICS_LIBP_LIBS=timeStepper mesh parAdogs ogs linAlg core
 
+# HDF5 output, opt-in with "make HDF5=1" (needs libhdf5-dev). HighFive is
+# header-only: set HIGHFIVE_INC, or run "make fetch-highfive" once. Fetching is
+# never a build prerequisite, so an ordinary build stays offline.
+HIGHFIVE_VERSION ?= v2.3.1
+HIGHFIVE_REPO    ?= https://github.com/BlueBrain/HighFive
+HIGHFIVE_DIR     ?= third_party/HighFive
+
+# stamp file so toggling HDF5 recompiles instead of silently relinking stale objects
+HDF5_STAMP = .hdf5cfg-$(if $(HDF5),on,off)
+
+ifdef HDF5
+HDF5_INC     ?= /usr/include/hdf5/serial
+HDF5_LIBDIR  ?= /usr/lib/x86_64-linux-gnu/hdf5/serial
+HIGHFIVE_INC ?= $(HIGHFIVE_DIR)/include
+
+HDF5_FLAGS = -DLIBP_HDF5 -I$(HDF5_INC) -I$(HIGHFIVE_INC)
+HDF5_LIBS  = -L$(HDF5_LIBDIR) -lhdf5
+else
+HDF5_FLAGS =
+HDF5_LIBS  =
+endif
+
 #includes
 INCLUDES=${LIBP_INCLUDES} \
-				 -I.
+				 -I. \
+         $(HDF5_FLAGS)
 
 #defines
 DEFINES =${LIBP_DEFINES} \
@@ -93,7 +120,8 @@ ACOUSTICS_CXXFLAGS=${LIBP_CXXFLAGS} ${DEFINES} ${INCLUDES}
 
 #link libraries
 LIBS=-L${LIBP_LIBS_DIR} $(addprefix -l,$(ACOUSTICS_LIBP_LIBS)) \
-     ${LIBP_LIBS}
+     ${LIBP_LIBS} \
+     $(HDF5_LIBS)
 
 #link flags
 LFLAGS=${ACOUSTICS_CXXFLAGS} ${LIBS}
@@ -108,7 +136,7 @@ SRC =$(wildcard src/*.cpp)
 OBJS=$(SRC:.cpp=.o)
 
 .PHONY: all lib libp_libs clean clean-libs \
-		clean-kernels realclean help info
+		clean-kernels realclean help info fetch-highfive
 
 all: acousticsMain
 
@@ -137,8 +165,12 @@ else
 	@ar -cr libacoustics.a $(OBJS)
 endif
 
+$(HDF5_STAMP):
+	@rm -f .hdf5cfg-on .hdf5cfg-off
+	@touch $@
+
 # rule for .cpp files
-%.o: %.cpp $(DEPS) | libp_libs
+%.o: %.cpp $(DEPS) $(HDF5_STAMP) | libp_libs
 ifneq (,${verbose})
 	$(LIBP_CXX) -o $*.o -c $*.cpp $(ACOUSTICS_CXXFLAGS)
 else
@@ -146,9 +178,14 @@ else
 	@$(LIBP_CXX) -o $*.o -c $*.cpp $(ACOUSTICS_CXXFLAGS)
 endif
 
+fetch-highfive:
+	@printf "%b" "$(OBJ_COLOR)Fetching HighFive $(HIGHFIVE_VERSION)$(NO_COLOR)\n";
+	@rm -rf $(HIGHFIVE_DIR)
+	@git clone --quiet --depth 1 --branch $(HIGHFIVE_VERSION) $(HIGHFIVE_REPO) $(HIGHFIVE_DIR)
+
 #cleanup
 clean:
-	rm -f src/*.o *.o acousticsMain libacoustics.a
+	rm -f src/*.o *.o acousticsMain libacoustics.a .hdf5cfg-*
 
 clean-libs: clean
 	${MAKE} -C ${LIBP_LIBS_DIR} clean
@@ -157,6 +194,7 @@ clean-kernels: clean-libs
 	rm -rf ${LIBP_DIR}/.occa/
 
 realclean: clean
+	rm -rf $(HIGHFIVE_DIR)
 	${MAKE} -C ${LIBP_LIBS_DIR} realclean
 
 help:
@@ -169,6 +207,7 @@ info:
 	$(info LIBP_ARCH = $(LIBP_ARCH))
 	$(info CXXFLAGS  = $(ACOUSTICS_CXXFLAGS))
 	$(info LIBS      = $(LIBS))
+	$(info HDF5      = $(if $(HDF5),enabled,disabled (build with HDF5=1)))
 	@true
 
 test: acousticsMain

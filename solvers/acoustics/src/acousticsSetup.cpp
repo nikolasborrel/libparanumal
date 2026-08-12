@@ -25,6 +25,10 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <cstdarg>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 
 void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
                         acousticsSettings_t& _settings){
@@ -186,6 +190,49 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
   initialConditionKernel = platform.buildKernel(fileName, kernelName,
                                                   kernelInfo);
 
+  // before SetupOutput so output cadences can be clamped to dt; reused in Run()
+  ComputeTimeStep();
+
+  SetupOutput();
+
   // Setup receiver interpolation (builds kernel + allocates buffers)
   SetupReceivers();
+}
+
+void acoustics_t::SetupOutput()
+{
+  outDir = ".";
+  if (settings.hasSetting("OUTPUT DIRECTORY"))
+    settings.getSetting("OUTPUT DIRECTORY", outDir);
+  if (outDir.empty()) outDir = ".";
+  while (outDir.size() > 1 && outDir.back() == '/') outDir.pop_back();
+
+  // error_code overload so a benign race between ranks doesn't throw
+  std::error_code ec;
+  std::filesystem::create_directories(outDir, ec);
+
+  simulationID = "acoustics";
+  if (settings.hasSetting("SIMULATION ID"))
+    settings.getSetting("SIMULATION ID", simulationID);
+
+  logPath = outDir + "/" + simulationID + ".log";
+}
+
+void acoustics_t::Logf(const char* fmt, ...)
+{
+  if (mesh.rank != 0) return;
+
+  char buf[2048];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  fputs(buf, stdout);
+  fflush(stdout);
+
+  if (logPath.empty()) return;
+  std::ofstream ofs(logPath, logOpened ? std::ios::app : std::ios::trunc);
+  logOpened = true;
+  ofs << buf;
 }

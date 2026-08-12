@@ -62,17 +62,19 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
              "1.0",
              "Multiplier for timestep stability bound");
 
+  // dt = cfl*hmin/(c*(N+1)^2) uses the physical speed of sound, so these are
+  // physical seconds
   newSetting("START TIME",
              "0",
-             "Start time for time integration");
+             "Start time for time integration [s]");
 
   newSetting("FINAL TIME",
              "10",
-             "End time for time integration");
+             "End time for time integration [s]");
 
   newSetting("OUTPUT INTERVAL",
              ".1",
-             "Time between printing output data");
+             "Time between output snapshots [s]");
 
   newSetting("OUTPUT TO FILE",
              "FALSE",
@@ -92,7 +94,11 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
 
   newSetting("OUTPUT DIRECTORY",
              ".",
-             "Directory for field/receiver output files");
+             "Directory for field/receiver output files (created if absent)");
+
+  newSetting("SIMULATION ID",
+             "acoustics",
+             "Stem name for run-scoped output files (<id>.log, <id>_receivers.h5)");
 }
 
 void acousticsSettings_t::report() {

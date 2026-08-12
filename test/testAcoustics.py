@@ -27,6 +27,7 @@
 #####################################################################################
 
 from test import *
+import shutil
 
 data2D = acousticsDir + "/data/acousticsGaussian2D.h"
 data3D = acousticsDir + "/data/acousticsGaussian3D.h"
@@ -47,7 +48,8 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
                       output_to_file="FALSE", density=1.0, sound_speed=1.0,
                       impedance=415.0, surface_flux="UPWIND",
-                      receiver_file=None, lr_file=None):
+                      receiver_file=None, lr_file=None,
+                      output_dir=None, simulation_id=None):
   settings = [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
           setting_t("DENSITY", density),
@@ -80,10 +82,19 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
   if lr_file is not None:
     settings.append(setting_t("LR VECTORFIT FILE", lr_file))
 
+  if output_dir is not None:
+    settings.append(setting_t("OUTPUT DIRECTORY", output_dir))
+
+  if simulation_id is not None:
+    settings.append(setting_t("SIMULATION ID", simulation_id))
+
   return settings
 
 def main():
   failCount=0;
+
+  #run-scoped output (logs, .h5) is written here and removed at the end
+  outDir = testDir + "/out"
 
   failCount += test(name="testAcousticsTri",
                     cmd=acousticsBin,
@@ -510,30 +521,40 @@ def main():
   #off-node receivers exercise the interpolation weights; sampling must not
   #perturb the solution, so the norm matches testAcousticsRoomRigidTet
   writeReceivers(recvFile, [(0.3, 0.15, -0.22), (-0.55, 0.42, 0.61)])
+  recvIRs = lambda simID: [(outDir + "/" + simID + "_receivers.h5",
+                            {"/impulse_responses": (2, None),
+                             "/positions":         (2, 3)},
+                            {("/impulse_responses", "n_receivers"): 2})]
+
   failCount += test(name="testAcousticsReceiverTet",
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
                                                degree=2,box_dim=2,boundary_flag=1,
-                                               final_time=2.0,receiver_file=recvFile),
+                                               final_time=2.0,receiver_file=recvFile,
+                                               output_dir=outDir,simulation_id="recvIR"),
                     referenceNorm=0.614784622759662,
-                    referenceRecvNorm=1.45569073560319)
+                    referenceRecvNorm=1.45569073560319,
+                    h5Checks=recvIRs("recvIR"))
 
   #ranks owning no receiver still take part in the collective kernel build and
-  #the norm reduction
+  #the norm reduction; the gathered .h5 must not depend on the rank count
   failCount += test(name="testAcousticsReceiverTet_MPI", ranks=4,
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
                                                degree=2,box_dim=2,boundary_flag=1,
-                                               final_time=2.0,receiver_file=recvFile),
+                                               final_time=2.0,receiver_file=recvFile,
+                                               output_dir=outDir,simulation_id="recvIRmpi"),
                     referenceNorm=0.614966266247452,
-                    referenceRecvNorm=1.45552027978335)
+                    referenceRecvNorm=1.45552027978335,
+                    h5Checks=recvIRs("recvIRmpi"))
 
   #clean up
   os.remove(recvFile)
   os.remove(lrFile)
   for file_name in os.listdir(testDir):
-    if file_name.endswith('.vtu'):
+    if file_name.endswith(('.vtu', '.h5', '.log')):
       os.remove(testDir + "/" + file_name)
+  shutil.rmtree(outDir, ignore_errors=True)
 
   return failCount
 

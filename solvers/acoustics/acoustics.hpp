@@ -34,6 +34,9 @@ SOFTWARE.
 #include "timeStepper.hpp"
 #include "linAlg.hpp"
 
+#include <string>
+#include <vector>
+
 #define DACOUSTICS LIBP_DIR"/solvers/acoustics/"
 
 using namespace libp;
@@ -130,6 +133,14 @@ public:
   void SetupEIRK4();
   void StepEIRK4(dfloat time, dfloat stepdt);
 
+  // output files are written under outDir, stemmed on simulationID
+  std::string simulationID;
+  std::string outDir;
+  std::string logPath;
+  bool        logOpened = false;  // truncate on first write, append thereafter
+  int         outputFrame = 0;
+  dfloat      dt = 0.0;
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {
@@ -142,6 +153,12 @@ public:
 
   void SetupReceivers();
   void SetupLRBC(properties_t& kernelInfo);
+
+  // resolve output paths; must run before any Logf()
+  void SetupOutput();
+
+  // rank 0: print to stdout and append to logPath
+  void Logf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
   void Run();
 
@@ -158,6 +175,11 @@ public:
             const dfloat time);
 
   dfloat MaxWaveSpeed();
+
+  // set dt from the CFL bound; called in Setup so cadences can be clamped to it
+  void ComputeTimeStep();
+
+  void WriteReceiverIRs();
 };
 
 #endif

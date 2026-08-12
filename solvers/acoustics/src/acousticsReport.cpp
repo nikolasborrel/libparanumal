@@ -28,7 +28,7 @@ SOFTWARE.
 
 void acoustics_t::Report(dfloat time, int tstep){
 
-  static int frame=0;
+  const int frame = outputFrame;
 
   // Sample receivers at this output instant
   if (NReceiversLocal > 0 && recvSampleIdx < NRecvSamples) {
@@ -56,8 +56,11 @@ void acoustics_t::Report(dfloat time, int tstep){
     std::string name;
     settings.getSetting("OUTPUT FILE NAME", name);
     char fname[BUFSIZ];
-    sprintf(fname, "%s_%04d_%04d.vtu", name.c_str(), mesh.rank, frame++);
+    snprintf(fname, sizeof(fname), "%s/%s_%04d_%04d.vtu",
+             outDir.c_str(), name.c_str(), mesh.rank, frame);
 
     PlotFields(q, std::string(fname));
   }
+
+  outputFrame++;
 }

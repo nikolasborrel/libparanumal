@@ -63,12 +63,8 @@ void acoustics_t::Run(){
                          mesh.o_z,
                          o_q);
 
-  dfloat cfl=1.0;
-  settings.getSetting("CFL NUMBER", cfl);
-
-  dfloat hmin = mesh.MinCharacteristicLength();
-  dfloat vmax = MaxWaveSpeed();
-  dfloat dt = cfl*hmin/(vmax*(mesh.N+1.)*(mesh.N+1.));
+  // dt is a member, set by ComputeTimeStep() during Setup. EIRK4 never touches
+  // the library stepper, so SetTimeStep happens in the else branch below.
 
   if(mesh.rank==0)
     printf("Time step dt = %17.15lg\n", dt);
@@ -82,6 +78,8 @@ void acoustics_t::Run(){
     // on the material fit, not on the mesh, so refining does not always help —
     // EIRK4 treats the accumulators implicitly and removes it entirely.
     const dfloat lserk4Stability = 2.78;
+    dfloat cfl = 1.0;
+    settings.getSetting("CFL NUMBER", cfl);
     LIBP_ABORT("LR pole rate " << LRMaxPole << " 1/s exceeds the LSERK4 stability "
                "bound at dt " << dt << ". Use TIME INTEGRATOR EIRK4, or CFL NUMBER <= "
                << cfl*lserk4Stability/(LRMaxPole*dt),
@@ -167,6 +165,8 @@ void acoustics_t::Run(){
     timeStepper.SetTimeStep(dt);
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
+
+  WriteReceiverIRs();
 
   // output norm of the sampled receiver record
   if (NReceivers > 0) {
