@@ -25,6 +25,7 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <algorithm>
 
 // LSERK4 coefficients (Carpenter & Kennedy, 1994 — 5-stage 4th-order)
 static const dfloat _lserk4_rka[5] = {
@@ -106,6 +107,8 @@ void acoustics_t::Run(){
 
     dfloat outputInterval;
     settings.getSetting("OUTPUT INTERVAL", outputInterval);
+    // matches the clamp applied to timeStepsOut in SetupOutput()
+    outputInterval = std::max(outputInterval, dt);
     dfloat outputTime = startTime + outputInterval;
     dfloat time = startTime;
     int tstep = 0;
@@ -165,6 +168,8 @@ void acoustics_t::Run(){
     timeStepper.SetTimeStep(dt);
     timeStepper.Run(*this, o_q, startTime, finalTime);
   }
+
+  if (h5Writer) h5Writer->finalize(*this);
 
   WriteReceiverIRs();
 

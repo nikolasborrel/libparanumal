@@ -62,5 +62,11 @@ void acoustics_t::Report(dfloat time, int tstep){
     PlotFields(q, std::string(fname));
   }
 
+  // record the instant so the XDMF header is built from frames that exist
+  if (h5Writer) {
+    h5Writer->write(*this, frame);
+    outputTimes.push_back(time);
+  }
+
   outputFrame++;
 }

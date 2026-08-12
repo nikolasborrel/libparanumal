@@ -144,6 +144,28 @@ def checkH5(path, datasets={}, attrs={}):
 
   return None
 
+def checkXdmf(xdmfPath, h5Path):
+  """Verify every HDF reference in an XDMF sidecar resolves in the .h5."""
+  if not os.path.isfile(xdmfPath):
+    return "missing output file " + xdmfPath
+
+  refs = re.findall(r"\.h5:(/\S+)", open(xdmfPath).read())
+  if not refs:
+    return "no HDF references in " + os.path.basename(xdmfPath)
+
+  with h5py.File(h5Path, "r") as f:
+    missing = sorted({r for r in refs if r not in f})
+    if missing:
+      return os.path.basename(xdmfPath) + " references missing datasets " + \
+             str(missing)
+    #every pressure frame in the file should appear in the time series
+    frames = {n for n in f if n.startswith("data") and n not in ("data0", "data1")}
+    unref  = sorted({"/" + n for n in frames} - set(refs))
+    if unref:
+      return os.path.basename(xdmfPath) + " omits written frames " + str(unref)
+
+  return None
+
 def writeReceivers(filename, points):
   file = open(filename, "w")
   file.write(str(len(points)) + "\n")
@@ -179,13 +201,14 @@ def constantAdmittanceLRData(Yinf):
   return [3,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, Yinf]
 
 def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
-         referenceRecvNorm=None, expectAbort=None, h5Checks=None):
+         referenceRecvNorm=None, expectAbort=None, h5Checks=None, xdmfCheck=None):
 
   #referenceDt is None for integrators with a variable sized dt
   #expectAbort is a message the run must fail with, for configurations the
   #solver is required to reject rather than silently reinterpret
   #h5Checks is a list of (path, datasets, attrs) tuples passed to checkH5 once
   #the run has passed its norm checks; see checkH5 for the dict formats
+  #xdmfCheck is an (xdmf path, h5 path) pair passed to checkXdmf
 
   #create input file
   writeSetup("setup",settings)
@@ -277,12 +300,15 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
       else:
         #the norm checks passed; now inspect any requested HDF5 output
         noHDF5 = "built without HDF5" in run.stdout.decode()
+        wanted = h5Checks or xdmfCheck
         h5Error = None
-        if h5Checks and haveH5py and not noHDF5:
-          for path, datasets, attrs in h5Checks:
+        if wanted and haveH5py and not noHDF5:
+          for path, datasets, attrs in (h5Checks or []):
             h5Error = checkH5(path, datasets, attrs)
             if h5Error is not None:
               break
+          if h5Error is None and xdmfCheck is not None:
+            h5Error = checkXdmf(*xdmfCheck)
 
         if h5Error is not None:
           print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
@@ -290,7 +316,7 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
           #save the setup for reproducibility
           writeSetup(name,settings)
           failed = 1
-        elif h5Checks and (not haveH5py or noHDF5):
+        elif wanted and (not haveH5py or noHDF5):
           reason = "no h5py" if not haveH5py else "built without HDF5"
           print(bcolors.PASS + "PASS" + bcolors.ENDC +
                 bcolors.WARNING + " (HDF5 checks skipped: " + reason + ")" + bcolors.ENDC)

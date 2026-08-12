@@ -34,12 +34,15 @@ SOFTWARE.
 #include "timeStepper.hpp"
 #include "linAlg.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #define DACOUSTICS LIBP_DIR"/solvers/acoustics/"
 
 using namespace libp;
+
+#include "src/acousticsWriters.hpp"
 
 class acousticsSettings_t: public settings_t {
 public:
@@ -140,6 +143,11 @@ public:
   bool        logOpened = false;  // truncate on first write, append thereafter
   int         outputFrame = 0;
   dfloat      dt = 0.0;
+
+  OutputFormat outputFormat = OutputFormat::NONE;
+  std::unique_ptr<acousticWriter_t> h5Writer;
+  std::vector<dfloat> timeStepsOut;  // planned output times, for preallocation
+  std::vector<dfloat> outputTimes;   // times actually written
 
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,

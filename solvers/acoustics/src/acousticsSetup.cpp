@@ -25,6 +25,7 @@ SOFTWARE.
 */
 
 #include "acoustics.hpp"
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -216,6 +217,43 @@ void acoustics_t::SetupOutput()
     settings.getSetting("SIMULATION ID", simulationID);
 
   logPath = outDir + "/" + simulationID + ".log";
+
+  std::string fmt = "NONE";
+  if (settings.hasSetting("OUTPUT FORMAT"))
+    settings.getSetting("OUTPUT FORMAT", fmt);
+  outputFormat = (fmt == "H5COMPACT") ? OutputFormat::H5COMPACT
+               : (fmt == "XDMF")      ? OutputFormat::XDMF
+                                      : OutputFormat::NONE;
+  if (outputFormat == OutputFormat::NONE) return;
+
+#ifndef LIBP_HDF5
+  LIBP_FORCE_ABORT("OUTPUT FORMAT " << fmt << " needs an HDF5-enabled build "
+                   "(rebuild with \"make HDF5=1\")");
+#else
+  dfloat startTime, finalTime, outputInterval;
+  settings.getSetting("START TIME",      startTime);
+  settings.getSetting("FINAL TIME",      finalTime);
+  settings.getSetting("OUTPUT INTERVAL", outputInterval);
+
+  // the solver cannot emit more than one snapshot per step; without clamping,
+  // the output-crossing logic drifts and writes fewer frames than declared
+  const dfloat interval = std::max(outputInterval, dt);
+  if (outputInterval < dt)
+    Logf("WARNING: OUTPUT INTERVAL=%.4g s is below the solver dt=%.4g s, "
+         "clamped to %.4g s\n", outputInterval, dt, interval);
+
+  timeStepsOut.clear();
+  for (dfloat t = startTime; t <= finalTime + interval*1e-10; t += interval)
+    timeStepsOut.push_back(t);
+
+  // all HDF5 output is single-rank
+  if (mesh.rank == 0) {
+    if (outputFormat == OutputFormat::H5COMPACT)
+      h5Writer = std::make_unique<h5CompactWriter_t>(*this);
+    else
+      h5Writer = std::make_unique<xdmfWriter_t>(*this);
+  }
+#endif
 }
 
 void acoustics_t::Logf(const char* fmt, ...)

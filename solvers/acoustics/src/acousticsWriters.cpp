@@ -30,13 +30,17 @@ SOFTWARE.
 
 #ifdef LIBP_HDF5
 
+#include <cmath>
+#include <fstream>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <highfive/H5Easy.hpp>
 #include <highfive/H5File.hpp>
 #include <highfive/H5DataSet.hpp>
 #include <highfive/H5DataSpace.hpp>
+#include <highfive/H5PropertyList.hpp>
 
 using namespace HighFive;
 
@@ -95,6 +99,160 @@ void acoustics_t::WriteReceiverIRs() {
 
   Logf("  wrote %s (%zu receivers x %zu samples @ %d Hz)\n",
        path.c_str(), nRecv, nSamples, sampleRateOut);
+}
+
+// Deduplicate DG nodes shared between elements, quantising coordinates to 1e-5
+// before hashing.
+uniquePoints_t buildUniquePoints(acoustics_t& ac) {
+  mesh_t& mesh = ac.mesh;
+  const bool is3D = (mesh.dim == 3);
+
+  struct key_t { long long x, y, z; };
+  struct hash_t {
+    size_t operator()(const key_t& k) const {
+      std::hash<long long> h;
+      return h(k.x) ^ (h(k.y) << 1) ^ (h(k.z) << 2);
+    }
+  };
+  struct eq_t {
+    bool operator()(const key_t& a, const key_t& b) const {
+      return a.x == b.x && a.y == b.y && a.z == b.z;
+    }
+  };
+  auto quantise = [](dfloat v) { return (long long)std::llround(v * 1e5); };
+
+  uniquePoints_t pts;
+  std::unordered_map<key_t, unsigned, hash_t, eq_t> seen;
+
+  for (dlong e = 0; e < mesh.Nelements; ++e) {
+    for (int n = 0; n < mesh.Np; ++n) {
+      const dlong id = n + mesh.Np * e;
+      const dfloat x = mesh.x[id], y = mesh.y[id];
+      const dfloat z = is3D ? mesh.z[id] : 0.0;
+
+      auto [it, inserted] = seen.emplace(key_t{quantise(x), quantise(y), quantise(z)},
+                                         (unsigned)pts.x.size());
+      if (!inserted) continue;
+
+      pts.x.push_back((float)x);
+      pts.y.push_back((float)y);
+      pts.z.push_back((float)z);
+      pts.qidx.push_back(e * mesh.Np * ac.Nfields + n);  // pressure is field 0
+    }
+  }
+  return pts;
+}
+
+void gatherPressures(acoustics_t& ac, const uniquePoints_t& pts,
+                     std::vector<float>& p) {
+  ac.o_q.copyTo(ac.q);
+  p.resize(pts.qidx.size());
+  for (size_t i = 0; i < pts.qidx.size(); ++i)
+    p[i] = (float)ac.q[pts.qidx[i]];
+}
+
+h5CompactWriter_t::h5CompactWriter_t(acoustics_t& ac)
+{
+  const std::string path = ac.outDir + "/" + ac.simulationID + ".h5";
+  _pts     = buildUniquePoints(ac);
+  _nFrames = ac.timeStepsOut.size();
+
+  const size_t nPts = _pts.x.size();
+  std::vector<std::vector<float>> coords(nPts, std::vector<float>(3));
+  for (size_t i = 0; i < nPts; ++i)
+    coords[i] = {_pts.x[i], _pts.y[i], _pts.z[i]};
+
+  File file(path, File::Overwrite);
+  file.createDataSet<float>("/mesh", DataSpace::From(coords)).write(coords);
+
+  DataSetCreateProps props;
+  props.add(Chunking(std::vector<hsize_t>{1, (hsize_t)nPts}));
+  _pressures = file.createDataSet<float>(
+      "/pressures", DataSpace(std::vector<size_t>{_nFrames, nPts}), props);
+
+  H5Easy::dumpAttribute(file, "/pressures", "time_steps", ac.timeStepsOut);
+}
+
+void h5CompactWriter_t::write(acoustics_t& ac, int frame)
+{
+  if ((size_t)frame >= _nFrames) return;   // preallocated rows are the limit
+
+  std::vector<float> p;
+  gatherPressures(ac, _pts, p);
+  _pressures.select({(size_t)frame, 0}, {1, p.size()}).write(p);
+}
+
+xdmfWriter_t::xdmfWriter_t(acoustics_t& ac)
+{
+  _nameH5   = ac.simulationID + ".h5";
+  _pathH5   = ac.outDir + "/" + _nameH5;
+  _pathXdmf = ac.outDir + "/" + ac.simulationID + ".xdmf";
+  _pts      = buildUniquePoints(ac);
+
+  const size_t nPts = _pts.x.size();
+  std::vector<std::vector<double>> coords(nPts, std::vector<double>(3));
+  std::vector<int> verts(nPts);
+  for (size_t i = 0; i < nPts; ++i) {
+    coords[i] = {_pts.x[i], _pts.y[i], _pts.z[i]};
+    verts[i]  = (int)i;
+  }
+
+  File file(_pathH5, File::Overwrite);
+  file.createDataSet<double>("/data0", DataSpace::From(coords)).write(coords);
+  file.createDataSet<int>   ("/data1", DataSpace::From(verts)).write(verts);
+
+  // the sidecar is written in finalize(), once the frame count is known
+}
+
+void xdmfWriter_t::write(acoustics_t& ac, int frame)
+{
+  std::vector<float> p;
+  gatherPressures(ac, _pts, p);
+
+  H5Easy::File file(_pathH5, H5Easy::File::OpenOrCreate);
+  H5Easy::dump(file, "/data" + std::to_string(frame + 2), p);
+}
+
+void xdmfWriter_t::finalize(acoustics_t& ac)
+{
+  const size_t nPts = _pts.x.size();
+  std::ofstream ofs(_pathXdmf);
+
+  ofs << "<?xml version=\"1.0\" ?>\n";
+  ofs << "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>\n";
+  ofs << "<Xdmf Version=\"3.0\">\n";
+  ofs << "  <Domain>\n";
+  ofs << "    <Grid Name=\"TimeSeries\" GridType=\"Collection\" CollectionType=\"Temporal\">\n";
+
+  // one grid per frame actually written, so the series never references a
+  // /dataN that is missing from the file
+  for (size_t i = 0; i < ac.outputTimes.size(); ++i) {
+    ofs << "      <Grid>\n";
+    ofs << "        <include xpointer=\"xpointer(//Grid[@Name=&quot;mesh&quot;]/*[self::Topology or self::Geometry])\" />\n";
+    ofs << "        <Time Value=\"" << ac.outputTimes[i] << "\" />\n";
+    ofs << "        <Attribute Name=\"p\" AttributeType=\"Scalar\" Center=\"Node\">\n";
+    ofs << "          <DataItem DataType=\"Float\" Dimensions=\"" << nPts << "\" Format=\"HDF\" Precision=\"8\">\n";
+    ofs << "            " << _nameH5 << ":/data" << (i + 2) << "\n";
+    ofs << "          </DataItem>\n";
+    ofs << "        </Attribute>\n";
+    ofs << "      </Grid>\n";
+  }
+
+  ofs << "    </Grid>\n";
+  ofs << "    <Grid Name=\"mesh\" GridType=\"Uniform\">\n";
+  ofs << "      <Geometry GeometryType=\"XYZ\">\n";
+  ofs << "        <DataItem DataType=\"Float\" Dimensions=\"" << nPts << " 3\" Format=\"HDF\" Precision=\"8\">\n";
+  ofs << "          " << _nameH5 << ":/data0\n";
+  ofs << "        </DataItem>\n";
+  ofs << "      </Geometry>\n";
+  ofs << "      <Topology TopologyType=\"Polyvertex\" NumberOfElements=\"" << nPts << "\">\n";
+  ofs << "        <DataItem DataType=\"Int\" Dimensions=\"" << nPts << " 1\" Format=\"HDF\" Precision=\"8\">\n";
+  ofs << "          " << _nameH5 << ":/data1\n";
+  ofs << "        </DataItem>\n";
+  ofs << "      </Topology>\n";
+  ofs << "    </Grid>\n";
+  ofs << "  </Domain>\n";
+  ofs << "</Xdmf>\n";
 }
 
 #else  // !LIBP_HDF5
