@@ -35,9 +35,11 @@ def acousticsSettings(rcformat="2.0", data_file=data2D,
                      mesh="BOX", dim=2, element=4, nx=10, ny=10, nz=10, boundary_flag=-1,
                      degree=4, thread_model=device, platform_number=0, device_number=0,
                       time_integrator="DOPRI5", cfl=1.0, start_time=0.0, final_time=1.0,
-                      output_to_file="FALSE"):
+                      output_to_file="FALSE", density=1.0, sound_speed=1.0):
   return [setting_t("FORMAT", rcformat),
           setting_t("DATA FILE", data_file),
+          setting_t("DENSITY", density),
+          setting_t("SPEED OF SOUND", sound_speed),
           setting_t("MESH FILE", mesh),
           setting_t("MESH DIMENSION", dim),
           setting_t("ELEMENT TYPE", element),
@@ -84,6 +86,16 @@ def main():
                     cmd=acousticsBin,
                     settings=acousticsSettings(element=3,data_file=data2D,dim=2,output_to_file="TRUE"),
                     referenceNorm=10.1300558638317)
+
+  #fixed step LSERK4 so dt is constant; dt = cfl*hmin/(c*(N+1)^2) scales as 1/c,
+  #so referenceDt is the c=1 Tet dt / 343
+  failCount += test(name="testAcousticsMedium",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3D,dim=3,
+                                               degree=2,sound_speed=343.0,density=1.2,
+                                               time_integrator="LSERK4",final_time=0.05),
+                    referenceNorm=31.6579637397127,
+                    referenceDt=0.000229059533912066)
 
   #clean up
   for file_name in os.listdir(testDir):

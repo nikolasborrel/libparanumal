@@ -27,9 +27,7 @@ SOFTWARE.
 #include "acoustics.hpp"
 
 dfloat acoustics_t::MaxWaveSpeed(){
-  //wavespeed is constant 1 everywhere
-  const dfloat vmax = 1.0;
-  return vmax;
+  return c;
 }
 
 //evaluate ODE rhs = f(q,t)
