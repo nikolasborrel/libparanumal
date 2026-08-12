@@ -37,8 +37,12 @@ CUDA
 [DEVICE NUMBER]
 0
 
+# EIRK4 treats the vectorfit pole accumulators implicitly, so the step size
+# follows the mesh CFL alone. Under LSERK4 they are advanced explicitly and the
+# fastest pole of the fit also has to satisfy |pole|*dt <= 2.78, which a stiffer
+# material can push well below the CFL bound. Both give the same answer.
 [TIME INTEGRATOR]
-LSERK4
+EIRK4
 
 [START TIME]
 0
