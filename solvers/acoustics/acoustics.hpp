@@ -99,17 +99,36 @@ public:
   memory<dfloat>       LR;       // vectorfit coefficients
   memory<dlong>        LRInfo;   // [Npoles, NRealPoles, NImagPoles]
   memory<dlong>        mapAcc;   // [Nelements*Nfp*Nfaces] face-node → acc row (-1 if not LR)
+  memory<dlong>        mapAccToQ;// [NLRPoints] acc row → that node's pressure entry in q
   memory<dfloat>       acc;      // [NLRPoints * LRNpoles] accumulator state (host copy)
   memory<dfloat>       resacc;   // [NLRPoints * LRNpoles] LSERK4 residual
 
   deviceMemory<dfloat> o_LR;
   deviceMemory<dlong>  o_LRInfo;
   deviceMemory<dlong>  o_mapAcc;
+  deviceMemory<dlong>  o_mapAccToQ;
   deviceMemory<dfloat> o_acc;
   deviceMemory<dfloat> o_resacc;
   deviceMemory<dfloat> o_rhsacc; // filled by surfaceKernel each rhsf() call
 
   kernel_t updateKernelLR;
+
+  // EIRK4 — ARK4(3)6L[2]SA additive Runge-Kutta. Explicit for the wave field,
+  // L-stable ESDIRK for the LR accumulators, so the pole rates of the vectorfit
+  // no longer constrain dt. See src/acousticsEIRK4.cpp.
+  bool useEIRK4 = false;
+
+  deviceMemory<dfloat> o_erkA, o_erkB, o_esdirkA;
+  deviceMemory<dfloat> o_eirkResq;  // field stage value, halo-sized
+  deviceMemory<dfloat> o_eirkXacc;  // accumulator stage value
+  deviceMemory<dfloat> o_eirkKq;    // [6 x N]    field stage derivatives
+  deviceMemory<dfloat> o_eirkKacc;  // [6 x Nacc] accumulator stage derivatives
+
+  kernel_t updateKernelEIRK4;
+  kernel_t updateKernelEIRK4LR;
+
+  void SetupEIRK4();
+  void StepEIRK4(dfloat time, dfloat stepdt);
 
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
@@ -131,6 +150,12 @@ public:
   void PlotFields(memory<dfloat> Q, const std::string fileName);
 
   void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs, const dfloat time);
+
+  // rhsf on explicit accumulator buffers, for schemes that stage the LR
+  // accumulators separately from o_acc. The two-buffer form above forwards here.
+  void rhsf(deviceMemory<dfloat>& o_q, deviceMemory<dfloat>& o_rhs,
+            deviceMemory<dfloat>& o_ACC, deviceMemory<dfloat>& o_RHSACC,
+            const dfloat time);
 
   dfloat MaxWaveSpeed();
 };

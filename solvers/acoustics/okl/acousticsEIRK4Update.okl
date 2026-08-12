@@ -1,0 +1,60 @@
+/*
+
+The MIT License (MIT)
+
+Copyright (c) 2017-2022 Tim Warburton, Noel Chalmers, Jesse Chan, Ali Karakus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
+// Explicit half of EIRK4 (ARK4(3)6L[2]SA): the wave field.
+//
+// stage < 5: resq = q_n + dt*sum_{j<=stage} erkA[stage+1][j]*k_j   -> Q_{stage+2}
+// stage = 5: q    = q_n + dt*sum_j erkB[j]*k_j                     -> q_{n+1}
+//
+// The stage derivatives live in one buffer, k_j at offset j*N. The sum is
+// bounded by the stage: platform.malloc does not zero, so summing over slots
+// that have not been written yet would multiply 0.0 by uninitialised memory.
+@kernel void acousticsEIRK4Update(const dlong N,
+                                  const int stage,
+                                  const dfloat dt,
+                                  @restrict const  dfloat *  erkA,   // [6][6]
+                                  @restrict const  dfloat *  erkB,   // [6]
+                                  @restrict const  dfloat *  kq,     // [6*N]
+                                  @restrict        dfloat *  q,
+                                  @restrict        dfloat *  resq) {
+
+  for(dlong n=0;n<N;++n;@tile(256,@outer,@inner)){
+
+    dfloat r_q = 0.0;
+
+    if (stage < 5) {
+      for (int j=0;j<=stage;++j)
+        r_q += erkA[6*(stage+1) + j]*kq[n + j*N];
+
+      resq[n] = q[n] + dt*r_q;
+    } else {
+      for (int j=0;j<6;++j)
+        r_q += erkB[j]*kq[n + j*N];
+
+      q[n] += dt*r_q;
+    }
+  }
+}

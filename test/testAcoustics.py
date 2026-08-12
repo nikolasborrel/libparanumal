@@ -234,6 +234,17 @@ def main():
                     referenceNorm=None,
                     expectAbort="Mesh has BC==3 (locally-reacting) faces but no LR VECTORFIT FILE")
 
+  #the surface kernel walks the complex pairs two at a time, so a header whose
+  #pole counts do not add up would read past the end of each accumulator row
+  writeLRData(lrFile, [4,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, 0.2])
+  failCount += test(name="testAcousticsRoomLRBadPoleCount",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.1,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=None,
+                    expectAbort="LR vectorfit header inconsistent")
+
   #boundary flag 3 is the locally-reacting BC. A constant surface admittance Y
   #must reproduce the frequency-independent BC with Z = 1/Y
   writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
@@ -364,6 +375,125 @@ def main():
                                                density=1.2,sound_speed=343.0,
                                                time_integrator="LSERK4",lr_file=lrFile),
                     referenceNorm=0.350247744152265)
+
+  #EIRK4 treats the accumulators implicitly. It must agree with LSERK4 wherever
+  #LSERK4 is usable, and remain usable where LSERK4 is not.
+
+  #with every residue zero the admittance is the constant Yinf, so this has to
+  #land on the frequency-independent impedance norm exactly as the LSERK4 run does
+  writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))
+  failCount += test(name="testAcousticsRoomLREirk4ConstantTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.387485800176955)
+
+  failCount += test(name="testAcousticsRoomLREirk4ConstantTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=3,
+                                               final_time=2.0,time_integrator="EIRK4",
+                                               lr_file=lrFile),
+                    referenceNorm=0.298868490129398)
+
+  failCount += test(name="testAcousticsRoomLREirk4ConstantHex",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=12,data_file=data3DRoom,dim=3,
+                                               degree=2,box_dim=2,boundary_flag=3,
+                                               final_time=2.0,time_integrator="EIRK4",
+                                               lr_file=lrFile),
+                    referenceNorm=0.298590700093030)
+
+  #Y=0 is a rigid wall, whichever integrator advances the inert accumulators
+  writeLRData(lrFile, *constantAdmittanceLRData(0.0))
+  failCount += test(name="testAcousticsRoomLREirk4RigidTri",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=2.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.723214962153181)
+
+  #the real 14-pole fit, where the accumulators do feed back. Its own norm rather
+  #than the LSERK4 one: the schemes differ by 8.6e-7 here, inside TOL but not by
+  #much, since |pole|*dt is large enough for the two truncation errors to part
+  writeLRData(lrFile, lrHeader, lrCoeffs)
+  failCount += test(name="testAcousticsRoomLREirk4MaterialTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.350475572604912)
+
+  failCount += test(name="testAcousticsRoomLREirk4MaterialTet_MPI", ranks=4,
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=4,ny=4,nz=4,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.350248079818445)
+
+  #the time-scale invariance again, under EIRK4: this reproduces the EIRK4
+  #material norm above to 3e-15, so it pins the implicit stage arithmetic and not
+  #merely the tolerance
+  writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 2.0))
+  failCount += test(name="testAcousticsRoomLREirk4ScaledTet",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.01,
+                                               density=0.6,sound_speed=686.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.350475572604912)
+
+  #poles moved up by 8x without touching the medium, so dt stays put and
+  #|pole|*dt = 13 is far outside the explicit stability region. LSERK4 has to
+  #refuse the run rather than return NaN
+  writeLRData(lrFile, lrHeader, scaleLRData(lrCoeffs, 8.0))
+  failCount += test(name="testAcousticsRoomLRStiffLserk4",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=None,
+                    expectAbort="exceeds the LSERK4 stability bound")
+
+  #the same run under EIRK4, which is what the integrator exists for. The norm is
+  #6.5e-6 from the answer LSERK4 converges to once its step is small enough
+  failCount += test(name="testAcousticsRoomLREirk4Stiff",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=6,data_file=data3DRoom,dim=3,
+                                               degree=2,nx=6,ny=6,nz=6,box_dim=2,
+                                               boundary_flag=3,final_time=0.02,
+                                               density=1.2,sound_speed=343.0,
+                                               time_integrator="EIRK4",lr_file=lrFile),
+                    referenceNorm=0.436216205293)
+
+  #with no LR wall the implicit half has nothing to do and EIRK4 is a plain
+  #explicit scheme, so it reproduces the rigid-wall norm. dt is pinned too: the
+  #CFL bound is unchanged by the choice of integrator
+  failCount += test(name="testAcousticsEirk4NoLR",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=1,final_time=2.0,
+                                               time_integrator="EIRK4"),
+                    referenceNorm=0.723214962153181,
+                    referenceDt=0.00565685424949238)
+
+  #an integrator that cannot co-advance the accumulators must be refused
+  writeLRData(lrFile, lrHeader, lrCoeffs)
+  failCount += test(name="testAcousticsRoomLRAb3",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.1,
+                                               time_integrator="AB3",lr_file=lrFile),
+                    referenceNorm=None,
+                    expectAbort="require TIME INTEGRATOR LSERK4 or EIRK4")
 
   #the box centre is a mesh node, so the t=0 sample is exp(0)=1 exactly, and
   #final_time=0 leaves that sample as the whole record
