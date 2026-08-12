@@ -99,12 +99,14 @@ public:
   memory<dfloat>       LR;       // vectorfit coefficients
   memory<dlong>        LRInfo;   // [Npoles, NRealPoles, NImagPoles]
   memory<dlong>        mapAcc;   // [Nelements*Nfp*Nfaces] face-node → acc row (-1 if not LR)
+  memory<dlong>        mapAccToQ;// [NLRPoints] acc row → that node's pressure entry in q
   memory<dfloat>       acc;      // [NLRPoints * LRNpoles] accumulator state (host copy)
   memory<dfloat>       resacc;   // [NLRPoints * LRNpoles] LSERK4 residual
 
   deviceMemory<dfloat> o_LR;
   deviceMemory<dlong>  o_LRInfo;
   deviceMemory<dlong>  o_mapAcc;
+  deviceMemory<dlong>  o_mapAccToQ;
   deviceMemory<dfloat> o_acc;
   deviceMemory<dfloat> o_resacc;
   deviceMemory<dfloat> o_rhsacc; // filled by surfaceKernel each rhsf() call

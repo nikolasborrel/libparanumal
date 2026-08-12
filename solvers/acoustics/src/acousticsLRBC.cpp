@@ -130,6 +130,11 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   const dlong mapSize = mesh.Nelements * mesh.Nfp * mesh.Nfaces;
   mapAcc.malloc(mapSize, (dlong)-1);
 
+  // and the inverse: accumulator row → that node's pressure entry in q. LR faces
+  // are physical boundary faces, so the element is always locally owned and the
+  // index never lands in the halo region.
+  memory<dlong> mapAccToQFull(mapSize, (dlong)0);
+
   dlong counter = 0;
   for (dlong e = 0; e < mesh.Nelements; ++e) {
     for (int f = 0; f < mesh.Nfaces; ++f) {
@@ -137,12 +142,18 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
       if (bc == 3) {
         for (int n = 0; n < mesh.Nfp; ++n) {
           const dlong id = e*mesh.Nfp*mesh.Nfaces + f*mesh.Nfp + n;
+          // q is [Nelements][Nfields][Np] with pressure first, so the pressure
+          // of face node id sits at e*Np*Nfields + (vmapM[id] % Np)
+          mapAccToQFull[counter] = e*mesh.Np*Nfields + (mesh.vmapM[id] % mesh.Np);
           mapAcc[id] = counter++;
         }
       }
     }
   }
   NLRPoints = counter;
+
+  mapAccToQ.malloc(std::max(NLRPoints, (dlong)1), (dlong)0);
+  for (dlong n = 0; n < NLRPoints; ++n) mapAccToQ[n] = mapAccToQFull[n];
 
   // Every rank builds the same kernels below, so the decision to set LR up has
   // to be global: a rank owning no BC==3 face still takes part.
@@ -170,6 +181,7 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   o_LR     = platform.malloc<dfloat>(LR);
   o_LRInfo = platform.malloc<dlong> (LRInfo);
   o_mapAcc = platform.malloc<dlong> (mapAcc);
+  o_mapAccToQ = platform.malloc<dlong>(mapAccToQ);
   o_acc    = platform.malloc<dfloat>(acc);
   o_resacc = platform.malloc<dfloat>(resacc);
   o_rhsacc = platform.malloc<dfloat>(accSize);
