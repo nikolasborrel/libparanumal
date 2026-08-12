@@ -6,7 +6,21 @@
 # Produces out/wavefield.h5 + out/wavefield.xdmf — open the .xdmf in ParaView.
 
 [DATA FILE]
-data/acousticsGaussian3D.h
+data/acousticsGaussianFmax3D.h
+
+# Source width follows from FMAX as sigma = 2c/(pi*FMAX); set SXYZ to give it
+# explicitly instead.
+[FMAX]
+1.0
+
+[SOURCE X]
+0.5
+
+[SOURCE Y]
+0.0
+
+[SOURCE Z]
+-0.5
 
 [MESH FILE]
 BOX
