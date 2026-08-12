@@ -101,10 +101,46 @@ def writeSetup(filename, settings):
   file.write(str_settings)
   file.close()
 
+def writeReceivers(filename, points):
+  file = open(filename, "w")
+  file.write(str(len(points)) + "\n")
+  for point in points:
+    file.write("%.16g %.16g %.16g\n" % point)
+  file.close()
+
+#a vectorfit file is a "Npoles NRealPoles NImagPoles" header followed by one
+#coefficient per line in the order A, B, C, lambda, alpha, beta, Yinf, then a
+#"-----" footer recording the material that was fitted
+def readLRData(filename):
+  lines = []
+  for line in open(filename):
+    if line.startswith("-----"): break
+    if line.strip(): lines.append(line.strip())
+  return [int(v) for v in lines[0].split()], [float(v) for v in lines[1:]]
+
+def writeLRData(filename, header, coeffs):
+  file = open(filename, "w")
+  file.write("%d %d %d\n" % tuple(header))
+  for coeff in coeffs:
+    file.write("%.16g\n" % coeff)
+  file.close()
+
+#the residues and poles are rates in 1/s and scale with the time scale, the
+#instantaneous admittance Yinf (last entry) is a ratio and does not
+def scaleLRData(coeffs, kappa):
+  return [kappa*coeff for coeff in coeffs[:-1]] + [coeffs[-1]]
+
+#one real pole and one complex pair, all residues zero, so the admittance is the
+#constant Yinf while both pole loops still run
+def constantAdmittanceLRData(Yinf):
+  return [3,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, Yinf]
+
 def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
-         referenceRecvNorm=None):
+         referenceRecvNorm=None, expectAbort=None):
 
   #referenceDt is None for integrators with a variable sized dt
+  #expectAbort is a message the run must fail with, for configurations the
+  #solver is required to reject rather than silently reinterpret
 
   #create input file
   writeSetup("setup",settings)
@@ -115,6 +151,21 @@ def test(name, cmd, settings, referenceNorm, ranks=1, referenceDt=None,
   #run test
   run = subprocess.run(["mpirun", "--oversubscribe", "-np", str(ranks), cmd, inputRC],
                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+  if expectAbort is not None:
+    output = run.stdout.decode() + run.stderr.decode()
+    if run.returncode == 0:
+      print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+      print(bcolors.WARNING + "Expected the run to be rejected, but it succeeded" + bcolors.ENDC)
+      writeSetup(name,settings)
+      return 1
+    if expectAbort not in output:
+      print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+      print(bcolors.WARNING + "Expected message: " + expectAbort + bcolors.ENDC)
+      writeSetup(name,settings)
+      return 1
+    print(bcolors.PASS + "PASS" + bcolors.ENDC)
+    return 0
 
   if len(run.stdout.decode().splitlines())==0:
     #this failure is bad, dump the whole output for debug

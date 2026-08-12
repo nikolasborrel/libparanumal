@@ -135,6 +135,32 @@ void acoustics_t::Setup(platform_t& _platform, mesh_t& _mesh,
 
   volumeKernel =  platform.buildKernel(fileName, kernelName,
                                          kernelInfo);
+  // Safe defaults so the bc==3 branch in surface kernels compiles even when LR
+  // is not active. SetupLRBC overwrites these with the correct offsets when an
+  // LR vectorfit file is provided.
+  kernelInfo["defines/p_LRLambda"] = 0;
+  kernelInfo["defines/p_LRAlpha"]  = 0;
+  kernelInfo["defines/p_LRBeta"]   = 0;
+  kernelInfo["defines/p_LRA"]      = 0;
+  kernelInfo["defines/p_LRB"]      = 0;
+  kernelInfo["defines/p_LRC"]      = 0;
+  kernelInfo["defines/p_LRYinf"]   = 0;
+
+  // LR BC setup — may override defines above; must happen before surface kernel JIT
+  SetupLRBC(kernelInfo);
+
+  // Allocate minimal dummy LR buffers so the surface kernel never receives null
+  // pointers on non-LR runs (OCCA crashes on empty device pointers).
+  if (LRNpoles == 0) {
+    memory<dfloat> _lr(1, 0.0);   o_LR     = platform.malloc<dfloat>(_lr);
+    memory<dlong>  _li(3, 0LL);   o_LRInfo = platform.malloc<dlong> (_li);
+    memory<dlong>  _ma(1, -1LL);  o_mapAcc = platform.malloc<dlong> (_ma);
+    memory<dfloat> _ac(1, 0.0);
+    o_acc    = platform.malloc<dfloat>(_ac);
+    o_resacc = platform.malloc<dfloat>(_ac);
+    o_rhsacc = platform.malloc<dfloat>(_ac);
+  }
+
   // kernels from surface file
   fileName   = oklFilePrefix + "acousticsSurface" + suffix + oklFileSuffix;
   kernelName = "acousticsSurface" + suffix;

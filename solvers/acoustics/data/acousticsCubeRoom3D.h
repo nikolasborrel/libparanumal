@@ -24,21 +24,12 @@ SOFTWARE.
 
 */
 
-// Room acoustics boundary conditions (3D)
-//
-// BC types:
-//   1 — Perfect reflection (specular)
-//   2 — Frequency-independent impedance (Z = p_Z_IND)
-//   3 — Locally reacting, frequency-dependent impedance (LR VECTORFIT FILE)
-//
-// Activates the impedance flux path in surface kernels via p_ROOM_ACOUSTICS.
-// p_Z_IND is set as a kernel define from the FREQINDEP IMPEDANCE setting.
+// Room acoustics BCs for a unit cube mesh [0,1]^3 (e.g. cube_500hz_p4_5ppw.msh).
+// Matches the DTU test setup: source centered at (0.5, 0.5, 0.5), width sigma=0.4.
+// Use for cross-repo comparison against libparanumal-dtu reference WAV files.
 
 #define p_ROOM_ACOUSTICS 1
 
-// All BCs: set ghost state to specular reflection.
-// Impedance velocity (vn) is computed separately in the kernel body
-// using the BC type, so the macro only needs to set the plus state.
 #define acousticsDirichletConditions3D(bc, t, x, y, z, nx, ny, nz, rM, uM, vM, wM, rB, uB, vB, wB) \
 {                                                                                                     \
   if(bc > 0) {                                                                                       \
@@ -49,11 +40,15 @@ SOFTWARE.
   }                                                                                                  \
 }
 
-// Initial condition: Gaussian pressure pulse at the origin
-#define acousticsInitialConditions3D(t, x, y, z, r, u, v, w) \
-{                                                              \
-  *(r) = exp(-3.0*(x*x + y*y + z*z));                         \
-  *(u) = 0.0;                                                  \
-  *(v) = 0.0;                                                  \
-  *(w) = 0.0;                                                  \
+// Gaussian pulse centered at (0.5, 0.5, 0.5), sigma=0.4 — matches DTU SXYZ=0.4
+#define acousticsInitialConditions3D(t, x, y, z, r, u, v, w)  \
+{                                                               \
+  const dfloat _sx = x - 0.5;                                  \
+  const dfloat _sy = y - 0.5;                                  \
+  const dfloat _sz = z - 0.5;                                  \
+  const dfloat _sig = 0.4;                                      \
+  *(r) = exp(-(_sx*_sx + _sy*_sy + _sz*_sz) / (_sig*_sig));   \
+  *(u) = 0.0;                                                   \
+  *(v) = 0.0;                                                   \
+  *(w) = 0.0;                                                   \
 }

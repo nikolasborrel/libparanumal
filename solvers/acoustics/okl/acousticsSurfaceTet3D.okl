@@ -131,6 +131,40 @@ void centralBC(const dfloat nx,
   *wflux  = p_half*nz*(rP-rM)/p_rho;
 }
 
+#if defined(p_ROOM_ACOUSTICS)
+// Locally-reacting BC: advance the pole accumulators and return the wall-normal
+// velocity vn = Y(s)p of the vectorfit surface admittance Y
+dfloat lrNormalVelocity(const dfloat rM,
+                        const dlong idAcc,
+                        const dfloat *LR,
+                        const dlong  *LRInfo,
+                        const dfloat *acc,
+                        dfloat *rhsacc){
+
+  const dlong Npoles = LRInfo[0];
+  const dlong NReal  = LRInfo[1];
+  const dlong base   = Npoles*idAcc;
+
+  dfloat vn = LR[p_LRYinf]*rM;
+
+  for(int pi=0;pi<NReal;++pi){
+    rhsacc[base+pi] = -LR[p_LRLambda+pi]*acc[base+pi] + rM;
+    vn += LR[p_LRA+pi]*acc[base+pi];
+  }
+
+  for(int pi=NReal;pi<Npoles;pi+=2){
+    const int pIdx = (pi-NReal)/2;
+    rhsacc[base+pi]   = -LR[p_LRAlpha+pIdx]*acc[base+pi]
+                        -LR[p_LRBeta +pIdx]*acc[base+pi+1] + rM;
+    rhsacc[base+pi+1] = -LR[p_LRAlpha+pIdx]*acc[base+pi+1]
+                        +LR[p_LRBeta +pIdx]*acc[base+pi];
+    vn += 2.0*(LR[p_LRB+pIdx]*acc[base+pi] + LR[p_LRC+pIdx]*acc[base+pi+1]);
+  }
+
+  return vn;
+}
+#endif
+
 // batch process elements
 @kernel void acousticsSurfaceTet3D(const dlong Nelements,
                                   @restrict const  dlong  *  elementIds,
@@ -144,7 +178,13 @@ void centralBC(const dfloat nx,
                                   @restrict const  dfloat *  y,
                                   @restrict const  dfloat *  z,
                                   @restrict const  dfloat *  q,
-                                  @restrict dfloat *  rhsq){
+                                  @restrict        dfloat *  rhsq,
+                                  @restrict const  dfloat *  acc,
+                                  @restrict        dfloat *  rhsacc,
+                                  @restrict const  dlong  *  mapAcc,
+                                  @restrict const  dfloat *  LR,
+                                  @restrict const  dlong  *  LRInfo,
+                                  const dlong NLRPoints){
 
   // for all elements
   for(dlong eo=0;eo<Nelements;eo+=p_NblockS;@outer(0)){
@@ -213,7 +253,15 @@ void centralBC(const dfloat nx,
 
 #if defined(p_ROOM_ACOUSTICS)
             dfloat vn = 0.0;
-            if(bc == 2) vn = rM / p_Z_IND;
+            if(bc == 2){
+              vn = rM / p_Z_IND;
+            }
+
+            if(bc == 3){
+              vn = lrNormalVelocity(rM, mapAcc[element*p_Nfp*p_Nfaces + n],
+                                    LR, LRInfo, acc, rhsacc);
+            }
+
 #if defined(p_CENTRAL_FLUX)
             centralBC(nx, ny, nz, rM, uM, vM, wM, rP, uP, vP, wP, vn, &rflux, &uflux, &vflux, &wflux);
 #else

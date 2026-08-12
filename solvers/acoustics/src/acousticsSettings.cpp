@@ -80,6 +80,10 @@ acousticsSettings_t::acousticsSettings_t(comm_t _comm):
   newSetting("OUTPUT FILE NAME",
              "acoustics");
 
+  newSetting("LR VECTORFIT FILE",
+             "",
+             "Path to vectorfit data file for LR BCs (optional; required when BOX BOUNDARY FLAG or mesh has BC type 3)");
+
   newSetting("RECEIVER FILE",
              "",
              "Path to receiver locations file (optional)");

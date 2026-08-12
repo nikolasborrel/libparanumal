@@ -89,6 +89,28 @@ public:
 
   kernel_t receiverKernel;
 
+  // Locally Reacting (LR) BC — accumulator fields for frequency-dependent impedance
+  dlong LRNpoles = 0;
+  dlong LRNRealPoles = 0;
+  dlong LRNImagPoles = 0;
+  dlong NLRPoints = 0;           // total LR boundary face nodes on this rank
+  dfloat LRMaxPole = 0.0;        // fastest pole rate [1/s] in the vectorfit
+
+  memory<dfloat>       LR;       // vectorfit coefficients
+  memory<dlong>        LRInfo;   // [Npoles, NRealPoles, NImagPoles]
+  memory<dlong>        mapAcc;   // [Nelements*Nfp*Nfaces] face-node → acc row (-1 if not LR)
+  memory<dfloat>       acc;      // [NLRPoints * LRNpoles] accumulator state (host copy)
+  memory<dfloat>       resacc;   // [NLRPoints * LRNpoles] LSERK4 residual
+
+  deviceMemory<dfloat> o_LR;
+  deviceMemory<dlong>  o_LRInfo;
+  deviceMemory<dlong>  o_mapAcc;
+  deviceMemory<dfloat> o_acc;
+  deviceMemory<dfloat> o_resacc;
+  deviceMemory<dfloat> o_rhsacc; // filled by surfaceKernel each rhsf() call
+
+  kernel_t updateKernelLR;
+
   acoustics_t() = default;
   acoustics_t(platform_t &_platform, mesh_t &_mesh,
               acousticsSettings_t& _settings) {
@@ -100,6 +122,7 @@ public:
              acousticsSettings_t& _settings);
 
   void SetupReceivers();
+  void SetupLRBC(properties_t& kernelInfo);
 
   void Run();
 
