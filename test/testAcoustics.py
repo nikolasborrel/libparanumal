@@ -234,6 +234,17 @@ def main():
                     referenceNorm=None,
                     expectAbort="Mesh has BC==3 (locally-reacting) faces but no LR VECTORFIT FILE")
 
+  #the surface kernel walks the complex pairs two at a time, so a header whose
+  #pole counts do not add up would read past the end of each accumulator row
+  writeLRData(lrFile, [4,1,1], [0.0, 0.0, 0.0, 100.0, 100.0, 200.0, 0.2])
+  failCount += test(name="testAcousticsRoomLRBadPoleCount",
+                    cmd=acousticsBin,
+                    settings=acousticsSettings(element=3,data_file=data2DRoom,dim=2,
+                                               box_dim=2,boundary_flag=3,final_time=0.1,
+                                               time_integrator="LSERK4",lr_file=lrFile),
+                    referenceNorm=None,
+                    expectAbort="LR vectorfit header inconsistent")
+
   #boundary flag 3 is the locally-reacting BC. A constant surface admittance Y
   #must reproduce the frequency-independent BC with Z = 1/Y
   writeLRData(lrFile, *constantAdmittanceLRData(1.0/5.0))

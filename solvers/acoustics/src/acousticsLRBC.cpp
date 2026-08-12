@@ -87,6 +87,13 @@ void acoustics_t::SetupLRBC(properties_t& kernelInfo) {
   fscanf(fp, "%lld %lld %lld",
          (long long*)&LRNpoles, (long long*)&LRNRealPoles, (long long*)&LRNImagPoles);
 
+  // the surface kernel walks the complex pairs as pi += 2 reading acc[base+pi+1],
+  // so an inconsistent header runs off the end of the accumulator row
+  LIBP_ABORT("LR vectorfit header inconsistent: Npoles (" << LRNpoles
+             << ") must equal NRealPoles + 2*NImagPoles ("
+             << LRNRealPoles + 2*LRNImagPoles << ") in " << lrFile,
+             LRNpoles != LRNRealPoles + 2*LRNImagPoles);
+
   const dlong LRsize = 1 + 2*LRNRealPoles + 4*LRNImagPoles;
   LR.malloc(LRsize, 0.0);
   LRInfo.malloc(3);
