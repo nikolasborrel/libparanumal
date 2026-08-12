@@ -443,11 +443,12 @@ SOFTWARE.
               const dfloat dvdy = drdy*r_dvdr[es] + dsdy*r_dvds[es] + dtdy*r_dvdt[es];
               const dfloat dwdz = drdz*r_dwdr[es] + dsdz*r_dwds[es] + dtdz*r_dwdt[es];
 
-              // move to rhs
-              rhsq[base+0*p_Np] = -dudx-dvdy-dwdz;
-              rhsq[base+1*p_Np] = -drhodx;
-              rhsq[base+2*p_Np] = -drhody;
-              rhsq[base+3*p_Np] = -drhodz;
+              // move to rhs — dimensional acoustics: dp/dt = -rho*c^2 div(u),
+              // du/dt = -(1/rho) grad(p). Reduces to the c=1 form when rho=c=1.
+              rhsq[base+0*p_Np] = p_AcConstant*(-dudx-dvdy-dwdz);
+              rhsq[base+1*p_Np] = (-drhodx)/p_rho;
+              rhsq[base+2*p_Np] = (-drhody)/p_rho;
+              rhsq[base+3*p_Np] = (-drhodz)/p_rho;
             }
           }
 

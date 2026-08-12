@@ -101,10 +101,10 @@ SOFTWARE.
 
         const dlong base = e*p_Np*p_Nfields + j*p_Nq + i;
 
-        // move to rhs
-        rhsq[base+0*p_Np] = -invJW*rhsq0;
-        rhsq[base+1*p_Np] = -invJW*rhsq1;
-        rhsq[base+2*p_Np] = -invJW*rhsq2;
+        // move to rhs — dimensional acoustics (reduces to c=1 form when rho=c=1)
+        rhsq[base+0*p_Np] = -invJW*rhsq0*p_AcConstant;
+        rhsq[base+1*p_Np] = -invJW*rhsq1/p_rho;
+        rhsq[base+2*p_Np] = -invJW*rhsq2/p_rho;
 
       }
     }
